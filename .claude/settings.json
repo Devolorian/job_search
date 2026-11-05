@@ -1,0 +1,29 @@
+{
+  "$comment": "Project settings for the unattended scheduled runs. An interactive session approves MCP servers through a dialog; a headless `claude -p` has nobody to answer it, so the project's .mcp.json servers are enabled here explicitly. Paths starting with / are relative to the project root.",
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "telegram-mcp",
+    "google-sheets"
+  ],
+  "permissions": {
+    "allow": [
+      "Bash(uv run scripts/*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(date:*)",
+      "Bash(find vacancies:*)",
+      "Edit(/vacancies/**)",
+      "Edit(/logs/**)",
+      "Edit(/state/**)",
+      "mcp__telegram-mcp",
+      "mcp__google-sheets",
+      "mcp__claude-in-chrome"
+    ],
+    "deny": [
+      "Bash(rm:*)",
+      "Bash(git push:*)",
+      "Read(~/.job_search/**)",
+      "Bash(cat:*/.job_search/*)"
+    ]
+  }
+}

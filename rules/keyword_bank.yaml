@@ -1,0 +1,205 @@
+# Keyword vocabulary for Analytics Engineer / DWH roles, 2026.
+#
+# HOW THIS IS USED (read this before editing):
+#   - `core_*` groups drive the stack-overlap component of the match score.
+#   - The tailoring step may surface a keyword in the rendered CV ONLY if
+#     cv/master_cv.yaml already evidences it. This file is a vocabulary for
+#     RECOGNISING and SCORING job descriptions — it is NOT a list of things to
+#     claim. See CLAUDE.md rule 2.
+#   - `expansions` supply the acronym+full-form pairing required by ATS rule 21.
+
+core_languages:
+  - SQL
+  - Python
+  - Bash
+  - Jinja
+
+core_warehouses:
+  - Amazon Redshift
+  - Snowflake
+  - Google BigQuery
+  - Databricks
+  - ClickHouse
+  - Vertica
+  - Oracle
+  - Azure Synapse Analytics
+  - Microsoft Fabric
+  - PostgreSQL
+  - Greenplum
+
+core_transformation:
+  - dbt
+  - dbt Core
+  - dbt Cloud
+  - SQLMesh
+  - Dataform
+
+core_orchestration:
+  - Apache Airflow
+  - Dagster
+  - Prefect
+  - AWS Step Functions
+  - Azure Data Factory
+  - Astronomer
+
+ingestion_cdc:
+  - Fivetran
+  - Airbyte
+  - Debezium
+  - Kafka
+  - Confluent
+  - Stitch
+  - Snowplow
+  - AWS DMS
+
+processing:
+  - Apache Spark
+  - PySpark
+  - Delta Lake
+  - Apache Iceberg
+  - Apache Hudi
+  - Flink
+  - Hadoop
+
+bi_semantic:
+  - Power BI
+  - Tableau
+  - Looker
+  - LookML
+  - Metabase
+  - Superset
+  - Mode
+  - Sigma
+  - semantic layer
+  - metrics layer
+  - self-serve analytics
+  - DAX
+
+modeling:
+  - dimensional modeling
+  - star schema
+  - snowflake schema
+  - Kimball
+  - Inmon
+  - Data Vault 2.0
+  - raw vault
+  - business vault
+  - hub, link, satellite
+  - medallion architecture
+  - SCD Type 2
+  - fact table
+  - dimension table
+  - conformed dimensions
+  - data mart
+  - staging layer
+  - one big table
+  - data mesh
+  - normalization
+
+quality_governance:
+  - dbt tests
+  - Great Expectations
+  - Soda
+  - Elementary
+  - Monte Carlo
+  - data observability
+  - data quality framework
+  - data contracts
+  - data lineage
+  - data catalog
+  - data governance
+  - Unity Catalog
+  - Collibra
+  - Alation
+  - row-level security
+  - PII masking
+  - GDPR
+  - master data management
+
+architecture_process:
+  - ETL
+  - ELT
+  - incremental load
+  - full refresh
+  - merge
+  - upsert
+  - idempotency
+  - batch processing
+  - streaming
+  - event-driven architecture
+  - backfill
+  - partitioning
+  - clustering
+  - query optimization
+  - cost optimization
+  - SLA
+  - single source of truth
+  - REST API
+
+devops:
+  - Git
+  - GitHub
+  - GitLab
+  - Bitbucket
+  - CI/CD
+  - Docker
+  - Terraform
+  - Infrastructure as Code
+  - unit tests
+  - code review
+
+cloud:
+  - AWS
+  - Amazon S3
+  - AWS Glue
+  - AWS Lambda
+  - Amazon EMR
+  - Google Cloud Platform
+  - Cloud Composer
+  - Dataflow
+  - Microsoft Azure
+  - ADLS
+
+soft_architecture:
+  - stakeholder management
+  - cross-functional collaboration
+  - data-driven decision making
+  - KPI definition
+  - metric definition
+  - technical leadership
+  - mentoring
+  - documentation
+  - incident response
+  - on-call
+  - requirements gathering
+  - roadmap
+
+# Acronym -> full form, for ATS rule 21. Rendered as "ACRONYM (full form)" on first use.
+expansions:
+  dbt: data build tool
+  ETL: Extract, Transform, Load
+  ELT: Extract, Load, Transform
+  CDC: Change Data Capture
+  SCD: Slowly Changing Dimension
+  DWH: Data Warehouse
+  BI: Business Intelligence
+  CI/CD: Continuous Integration / Continuous Delivery
+  KPI: Key Performance Indicator
+  SLA: Service Level Agreement
+  EOD: End of Day
+  PII: Personally Identifiable Information
+  MDM: Master Data Management
+  OLAP: Online Analytical Processing
+
+# Terms that signal a role is NOT the target — used to down-score.
+negative_signals:
+  - machine learning model training
+  - deep learning
+  - computer vision
+  - NLP research
+  - MLOps
+  - feature store
+  - A/B test design only
+  - front-end
+  - React
+  - mobile development

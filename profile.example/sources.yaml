@@ -1,0 +1,41 @@
+# Overlay on config/sources.yaml (deep merge: mappings merge, lists replace). Only what is
+# specific to this candidate goes here; set `enabled: false` to switch a source off.
+
+sources:
+  linkedin:
+    keywords: [product designer, ux designer]
+    locations:
+      - {name: "Germany", remote: false, label: germany}
+      - {name: "European Union", remote: true, label: remote-eu}
+
+  wellfound:
+    lanes:
+      - role/l/product-designer/germany
+      - role/r/product-designer
+    accepted_remote_scopes: [germany, berlin, europe, european union, emea, dach, worldwide,
+                             anywhere, global]
+
+  builtin:
+    enabled: false               # Built In has no Berlin listing for this example
+
+  himalayas:
+    country: Germany
+    queries: [product designer, ux designer, design systems]
+
+  telegram:
+    enabled: false               # set a folder name and ~/.job_search/telegram.env to use it
+    folder: ""
+    prefilter_keywords: [product designer, ux designer, ui designer, figma]
+
+  board_discovery:
+    queries:
+      - '"Product Designer" remote Europe'
+      - '"Product Designer" Berlin'
+
+  wantapply:
+    enabled: false
+    listing_urls: []
+
+destinations:
+  google_sheets:
+    spreadsheet_id: ""           # written by uv run scripts/setup_sheets.py

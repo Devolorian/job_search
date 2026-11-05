@@ -1,0 +1,101 @@
+# Example search profile — a fictional Product Designer in Berlin. Copy profile.example/ to
+# profile/ (or run /setup-profile) and replace everything here with your own.
+
+candidate:
+  name: Jane Doe
+  current_title: Senior Product Designer
+  years_experience: 7
+  seniority: [mid, senior, lead, staff]
+
+# Role families: the titles that count, matched as lowercase substrings; the strongest weight
+# wins when a title matches two. Family keys are what routing.yaml, tracks and job.md refer to.
+role_families:
+  product_designer:
+    weight: 1.00
+    titles: ["product designer", "ux/ui designer", "ui/ux designer", "ux designer",
+             "interaction designer", "experience designer"]
+  design_systems:
+    weight: 0.90
+    titles: ["design systems designer", "design system designer", "design technologist"]
+  ux_researcher:
+    weight: 0.70
+    titles: ["ux researcher", "user researcher"]
+
+# Hard drops on the title.
+title_exclusions:
+  - "graphic designer"
+  - "intern"
+  - "junior"
+  - "working student"
+  - "head of"
+  - "director"
+  - "game designer"
+  - "fashion designer"
+
+# A backstop on the description, scoped to families on purpose: drop when a scoped family's
+# description carries one of `terms`, or carries none of `require_any`.
+description_exclusions:
+  applies_to_families: [ux_researcher]
+  terms: ["market research", "survey programming"]
+  require_any: ["usability", "interview", "prototype", "user research"]
+
+timezone: Europe/Berlin
+
+# Postings in these languages pass the collectors' English gate tagged for the model to judge
+# (profile/scan_rules.md). Only "es" has a detector so far; leave empty to drop non-English.
+posting_languages:
+  soft: []
+
+geo:
+  home:
+    country: Germany
+    city_label: berlin          # the geo label of an office in the home city
+    country_label: germany      # ... and of an office elsewhere in the country
+    # Names in an employer's "may hire in" list that reach a hire in Germany.
+    remote_scopes: [germany, deutschland, deu, de, europe, eu, european union, emea, dach,
+                    worldwide, anywhere, global]
+
+  remote_anywhere: accept
+  unspecified_location: worldwide   # remote with no country named anywhere = worldwide
+
+  onsite_or_hybrid:
+    accept_locations: [berlin]
+    accept_country: [germany, deutschland, munich, münchen, hamburg, cologne, köln,
+                     frankfurt, leipzig, potsdam]
+    otherwise: reject
+
+  # Locations that drop a posting when they are its only geography.
+  reject_if_location_only: []
+
+  relocation_support: bonus
+
+scoring:
+  weights:
+    title_match: 30
+    core_stack_overlap: 30       # see keyword_bank.yaml core_*
+    domain_match: 10
+    seniority_match: 10
+    geo_fit: 10
+    language_fit: 5
+    salary_disclosed: 5
+  thresholds:
+    strong: 70                   # Shortlist
+    viable: 50                   # folder + CV
+    lead_only: 35                # named in the run log only
+
+# Tools close enough to what the candidate has used to count as a stack hit for the SCORE —
+# never for the CV (CLAUDE.md rule 2).
+transferable_stack:
+  design_tools: [Sketch, Adobe XD, Framer]
+  research_tools: [Dovetail, Maze]
+
+domains_of_interest: [fintech, health, mobility, b2b saas, marketplace]
+
+languages: [english, german]
+
+# One track. Add more to run separate searches in parallel, each with its own tracker tab:
+#   - name: research
+#     families: [ux_researcher]
+#     sources: [linkedin_research]     # a second LinkedIn block in sources.yaml
+tracks:
+  - name: main

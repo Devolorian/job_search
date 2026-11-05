@@ -1,0 +1,40 @@
+# Keyword vocabulary for this candidate's profession. Used to RECOGNISE and SCORE job
+# descriptions (ats_lint.py JD coverage, the stack-overlap score) — never a list of things to
+# claim: a keyword reaches the CV only if master_cv.yaml evidences it (CLAUDE.md rule 2).
+# Every group except `expansions` and `negative_signals` counts. rules/keyword_bank.yaml is the
+# data-roles equivalent and the default when a profile has none.
+
+core_tools:
+  - Figma
+  - FigJam
+  - Sketch
+  - Adobe XD
+  - Framer
+  - Protopie
+
+core_practice:
+  - design system
+  - prototyping
+  - wireframing
+  - user research
+  - usability testing
+  - interaction design
+  - information architecture
+  - accessibility
+  - WCAG
+
+collaboration:
+  - Jira
+  - Confluence
+  - Storybook
+  - design tokens
+  - handoff
+
+expansions:
+  UX: User Experience
+  UI: User Interface
+  WCAG: Web Content Accessibility Guidelines
+
+negative_signals:
+  - print design
+  - packaging design

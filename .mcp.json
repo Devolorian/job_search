@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "telegram-mcp": {
+      "type": "stdio",
+      "command": "./scripts/mcp/telegram_mcp.sh",
+      "args": [],
+      "env": {}
+    },
+    "google-sheets": {
+      "type": "stdio",
+      "command": "./scripts/mcp/sheets_mcp.sh",
+      "args": [],
+      "env": {}
+    }
+  }
+}

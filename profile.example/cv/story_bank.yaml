@@ -1,0 +1,18 @@
+# STAR stories built from the bullet bank, for interviews (interview-prep, interview-debrief).
+# A detail enters `confirmed_details` only in the candidate's own words, dated, through a
+# debrief. A story moves from draft to confirmed when every open question is answered.
+
+stories:
+  - id: onboarding-redesign
+    title: "Merchant onboarding: four days to one"
+    evidence: [northwind-1]
+    answers: [impact, research, cross-functional work]
+    status: draft
+    situation: "TODO: what was broken about onboarding, and how it was noticed"
+    task: "TODO"
+    action: "TODO"
+    result: "Median time to first payment fell from four days to one (bullet northwind-1)."
+    confirmed_details: []
+    open_questions:
+      - "Who else was on the project, and what was your part?"
+      - "How was time to first payment measured?"

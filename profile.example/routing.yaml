@@ -1,0 +1,14 @@
+# Which role is searched on which source. Default: every role in search_profile.yaml
+# role_families on every source in the merged sources config. Print the matrix with
+#   uv run --with pyyaml scripts/role_routing.py
+#
+# only_on:    a role searched ONLY on the named sources (and, for company_boards, boards)
+# blacklist:  roles taken off sources; roles: "*" with except: for a source that takes few
+
+only_on: {}
+
+blacklist:
+  # LinkedIn keywords search title AND description, so keep it to the core titles.
+  - sources: [linkedin]
+    roles: "*"
+    except: [product_designer, design_systems]

@@ -1,0 +1,115 @@
+# The candidate's single source of truth: every rendered CV, cover letter and form answer is a
+# selection from this file and nothing else (CLAUDE.md rule 2). A FICTIONAL example — Jane Doe
+# does not exist. /setup-profile builds the real one from profile/inbox/.
+#
+# Schema:
+#   contact            printed in the CV header; cv_filename optional (default CV_<Surname>.pdf)
+#   summaries          one per variant; tailor.yaml's summary_variant picks one
+#   skills             grouped; every skill names the role ids that evidence it (ATS rule 19)
+#   skill_group_labels optional display names for the groups
+#   experience         roles, newest first; bullets are addressed as <role id>-<index>
+#   default_selection  what `render_cv.py --generic` renders (the CV is one page: a selection)
+#   education, certifications, languages
+#
+# A string starting with TODO, or a bullet with `placeholder: true`, blocks rendering until it
+# is filled in (or --allow-todo renders a draft without it). `needs_confirmation: true` marks a
+# bullet extracted from a document that the candidate has not confirmed yet.
+
+meta:
+  source: "Fictional example profile"
+
+contact:
+  full_name: "Jane Doe"
+  headline: "Senior Product Designer"
+  email: "jane.doe@example.com"
+  phone: "+49 30 0000 0000"
+  location: "Berlin, Germany"
+  work_authorization: "EU citizen"
+  linkedin: "https://www.linkedin.com/in/example"
+  github: ""
+  open_to: "Open to remote work in Europe and to on-site roles in Berlin"
+
+summaries:
+  product_designer: >
+    Product designer with 7 years in fintech and B2B SaaS. Takes features from research and
+    flows to shipped interfaces, and maintains the design system the product teams build on.
+  design_systems: >
+    Product designer with 7 years in fintech and B2B SaaS, the last three owning a design
+    system used by six product teams, from tokens in Figma to components in Storybook.
+
+skill_group_labels:
+  design_tools: "Design Tools"
+  practice: "Practice"
+  collaboration: "Collaboration"
+
+skills:
+  design_tools:
+    - {name: "Figma",    evidenced_by: [northwind, contoso]}
+    - {name: "FigJam",   evidenced_by: [northwind]}
+    - {name: "Protopie", evidenced_by: [contoso]}
+  practice:
+    - {name: "design system",        evidenced_by: [northwind]}
+    - {name: "prototyping",          evidenced_by: [northwind, contoso]}
+    - {name: "usability testing",    evidenced_by: [northwind, contoso]}
+    - {name: "accessibility",        evidenced_by: [northwind]}
+    - {name: "WCAG", expansion: "Web Content Accessibility Guidelines", evidenced_by: [northwind]}
+  collaboration:
+    - {name: "Storybook",     evidenced_by: [northwind]}
+    - {name: "design tokens", evidenced_by: [northwind]}
+    - {name: "Jira",          evidenced_by: [northwind, contoso]}
+
+experience:
+  - id: northwind
+    company: "Northwind Payments"
+    context: "Payments platform for small businesses"
+    title: "Senior Product Designer"
+    location: "Berlin, Germany"
+    start: "Mar 2022"
+    end: "Present"
+    bullets:
+      - text: "Built and maintain the design system used by six product teams: tokens in Figma, documented components in Storybook, and a review process for new patterns."
+        tags: [design_system, tokens, storybook]
+        quantified: true
+      - text: "Redesigned merchant onboarding from research through launch, cutting median time to first payment from four days to one."
+        tags: [onboarding, research, conversion]
+        quantified: true
+      - text: "Ran fortnightly usability tests with merchants and turned the findings into a backlog the product managers prioritise from."
+        tags: [usability_testing, research]
+        quantified: false
+      - text: "Brought the dashboard to WCAG 2.1 AA with engineering, fixing contrast, focus order and screen-reader labels across 40 screens."
+        tags: [accessibility, wcag]
+        quantified: true
+
+  - id: contoso
+    company: "Contoso Analytics"
+    context: "B2B SaaS for retail analytics"
+    title: "Product Designer"
+    location: "Hamburg, Germany"
+    start: "Jan 2019"
+    end: "Feb 2022"
+    bullets:
+      - text: "Designed the report builder, from interviews with twelve analysts to high-fidelity prototypes in Protopie, and supported it through release."
+        tags: [prototyping, research, b2b]
+        quantified: true
+      - text: "Reworked the navigation of the web app after tree testing, and support tickets about finding reports fell by a third."
+        tags: [information_architecture, usability_testing]
+        quantified: true
+
+default_selection:
+  summary_variant: product_designer
+  headline: "Senior Product Designer"
+  bullets:
+    northwind: [northwind-0, northwind-1, northwind-2, northwind-3]
+    contoso:   [contoso-0, contoso-1]
+
+education:
+  - degree: "BA, Communication Design"
+    institution: "Example University of the Arts"
+    location: "Berlin, Germany"
+    graduation: "Jul 2018"
+
+certifications: []
+
+languages:
+  - {name: "English", level: "Fluent (C1)"}
+  - {name: "German",  level: "Native"}

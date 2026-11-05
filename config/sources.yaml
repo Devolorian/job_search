@@ -1,0 +1,356 @@
+# Where the daily scan looks — the shared mechanics of every source. Candidate-specific values
+# (search keywords, lanes, the Telegram folder, the spreadsheet id) go in profile/sources.yaml,
+# which is deep-merged over this file by scripts/jobprofile.py: mappings merge key by key, lists
+# are replaced. A source with nothing to search for (no keywords, no lanes) runs and reports
+# nothing; set `enabled: false` in the overlay to skip it entirely.
+
+sources:
+
+  # Primary source: the official public career-board APIs of Greenhouse, Ashby, Lever,
+  # Workable, SmartRecruiters, Recruitee and Personio. No auth, no scraping, no robots.txt
+  # conflict — these endpoints exist to be read by aggregators.
+  #
+  # Companies are listed in config/companies.yaml; the ATS provider for each is resolved
+  # automatically and cached in state/ats_boards.json.
+  company_boards:
+    enabled: true
+    collector: "uv run scripts/collect_boards.py"
+    companies_file: config/companies.yaml
+    failure_mode: skip
+
+  # Supplementary. Real but thin, and the geography is usually unstated.
+  open_feeds:
+    enabled: true
+    collector: "uv run scripts/collect_boards.py --feeds"
+    feeds: [landing.jobs, arbeitnow, remotive, workingnomads]
+    failure_mode: skip
+
+  # LinkedIn, public guest endpoint only. No login, no cookies, no account:
+  # /jobs-guest/jobs/api/seeMoreJobPostings/search returns plain HTML job cards to anonymous
+  # callers. robots.txt disallows /jobs-guest/ for every user-agent; reading it anonymously at a
+  # few dozen requests a run is a considered override, not an oversight. What stays off the
+  # table: a logged-in session, a browser extension pointed at linkedin.com, and anything that
+  # touches the candidate's own account.
+  #
+  # Most hits duplicate the company boards. That is the point: dedup_key is the same
+  # sha1(company|title) as collect_boards.py, so a LinkedIn copy of a posting already collected
+  # from an ATS collides in state/seen.json and never makes a second folder.
+  #
+  # More LinkedIn searches (a second track's keywords, say) are more blocks of the same shape
+  # in profile/sources.yaml, run with `collect_linkedin.py --profile <block>`.
+  linkedin:
+    enabled: true
+    collector: "uv run scripts/collect_linkedin.py --json state/linkedin.jsonl"
+    failure_mode: skip
+    lookback_hours: 30      # overlaps the run cadence; dedup handles the repeats
+    # The first run of a source that has never run looks back two weeks, not 30 hours: a
+    # source switched on in the morning otherwise shows whatever was posted overnight, which
+    # is no basis for judging it. Armed by the absence of `linkedin.first_run_utc` in
+    # state/last_run.json; deleting that key re-arms it (the way to re-widen after adding a
+    # search lane).
+    first_run_lookback_hours: 336
+    # A wider window needs a wider budget, or the postings it misses never come back.
+    first_run_max_requests: 80
+    max_pages: 6            # 10 cards a page; paging stops early on a short page
+    max_requests: 45
+    # Pacing. The limit is a sliding window per anonymous IP: at 3-7s spacing nearly every run
+    # got a 429 after 1-15 requests, while a single request an hour later answered 200. So:
+    # slower requests and one real pause, not fewer searches.
+    delay_seconds: [6, 12]
+    rate_limit_backoff_seconds: 90
+    # What LinkedIn is asked for. A full-text query over title AND description, so it is a
+    # wide net, not a filter; which roles it keeps is profile/routing.yaml. Set in the profile.
+    keywords: []
+    # Drop postings whose description is not in English (function-word density; see
+    # scripts/langdetect_simple.py). Languages listed in search_profile.yaml
+    # `posting_languages.soft` pass with a `language` tag for the model to judge. A posting
+    # whose description could not be fetched is never judged and never dropped.
+    require_english_description: true
+    # Drop a posting that is neither remote nor in the candidate's home country
+    # (geo.onsite_or_hybrid in search_profile.yaml). A record still "unclear" after its
+    # description is read names a place outside it.
+    require_remote_or_home: true
+    # Search lanes: {name: <LinkedIn location>, remote: <send f_WT=2>, label: <geo label>}.
+    # remote: false sends no workplace filter (onsite, hybrid and remote alike); remote: true
+    # returns what employers marked remote — evidence the role is remote, NOT of its scope.
+    locations: []
+
+  # wellfound.com (formerly AngelList Talent). Anonymous GETs of the public role pages;
+  # robots.txt allows /role/*; it disallows /search, /_jobs/ and the ?jobId= / ?role= forms,
+  # none of which are used. The pages carry full descriptions and structured remote scope in
+  # their server-rendered HTML, so one request per page is the whole cost.
+  #
+  # A US-startup board: most remote roles accept the United States only. Listings are NOT
+  # sorted by date, so every page of a lane is read. `european-union` and `emea` are not real
+  # location slugs — they silently fall back to the unfiltered global list (5,000+ listings).
+  wellfound:
+    enabled: true
+    collector: "uv run scripts/collect_wellfound.py --json state/wellfound.jsonl"
+    failure_mode: skip
+    lookback_hours: 30
+    first_run_lookback_hours: 336
+    max_requests: 40
+    # Page paths: role/l/<role>/<place> or role/r/<role> (global remote). Set in the profile.
+    lanes: []
+    # Names matched against acceptedRemoteLocationNames, the employer's own list of where a
+    # remote hire may sit. Exact, per comma-separated part. A remote role whose list contains
+    # none of these has STATED a narrower scope and is dropped in the collector. An empty list
+    # is not a scope.
+    accepted_remote_scopes: [worldwide, anywhere, global]
+    require_english_description: true
+
+  # Built In (builtin.com). Anonymous GETs; robots.txt allows /jobs/... and /job/..., and
+  # explicitly allows /jobs*?page=. Listing cards carry the title and one location; a detail
+  # page carries a schema.org JobPosting with the description and structured geography.
+  builtin:
+    enabled: true
+    collector: "uv run scripts/collect_builtin.py --json state/builtin.jsonl"
+    failure_mode: skip
+    lookback_hours: 30            # sent as daysSinceUpdated, rounded up to whole days
+    first_run_lookback_hours: 336
+    max_requests: 60
+    max_pages: 15
+    delay_seconds: [3, 6]
+    # Listing paths, e.g. {path: "jobs/eu/spain/barcelona/data-analytics", label: barcelona}.
+    # A listing named for a city is not that city only; geography is decided per posting.
+    lanes: []
+    require_english_description: true
+
+  # EU Remote Jobs (euremotejobs.com). robots.txt allows /job/... and the sitemaps; the site's
+  # own feed and REST API answer 401, so the sitemap is the listing and the URL slug is the
+  # title gate. Each record carries `apply_url`, the employer's own ATS link, which
+  # scripts/discover_boards.py reads to add that company's board.
+  euremotejobs:
+    enabled: true
+    collector: "uv run scripts/collect_euremotejobs.py --json state/euremotejobs.jsonl"
+    failure_mode: skip
+    lookback_hours: 30
+    first_run_lookback_hours: 336
+    max_requests: 40
+    delay_seconds: [2, 4]
+    sitemaps: [job_listing-sitemap.xml, job_listing-sitemap2.xml, job_listing-sitemap3.xml]
+    require_english_description: true
+
+  # Himalayas (himalayas.app). The public search API takes a query and a country and returns
+  # full descriptions. robots.txt disallows `/jobs/*?page=`, so only page 1 (20 postings) of
+  # each query is read — several narrow queries instead of one deep one. Detail pages are
+  # behind a Cloudflare challenge and are never requested. The board's country list is
+  # unreliable both ways, so the geography call is the model's, on the text.
+  himalayas:
+    enabled: true
+    collector: "uv run scripts/collect_himalayas.py --json state/himalayas.jsonl"
+    failure_mode: skip
+    lookback_hours: 30
+    first_run_lookback_hours: 336
+    max_requests: 20              # one per query
+    delay_seconds: [2, 4]
+    country: ""                   # returns postings listing it AND postings listing none
+    # Words, not titles: the search matches title and description, the title gate decides.
+    queries: []
+    require_english_description: true
+
+  telegram:
+    # Off until the profile names a Telegram folder and the session is set up
+    # (~/.job_search/telegram.env).
+    enabled: false
+    # Chats are taken from this Telegram folder, matched on letters/digits only (an emoji
+    # prefix does not matter). Set in the profile.
+    folder: ""
+    resolve_folder_each_run: true   # picks up chats added to the folder later
+    lookback_hours: 30
+    # Used for any chat with no cursor in state/last_run.json yet — the first real run, and
+    # every chat added to the folder later (the window is per chat).
+    first_run_lookback_hours: 336
+    resolved_chats_file: state/telegram_chats.json
+    # Chats in the folder that are correspondence, not vacancy feeds: [{id: <int>, note: ...}].
+    exclude_chats: []
+    # ---------------------------------------------------------------------------
+    # Candidate self-posts, not vacancies.
+    #
+    # Many job chats are group chats where people post their OWN CV looking for work. To a
+    # keyword prefilter these are indistinguishable from vacancies — they contain every term
+    # searched for, and often an attached PDF. A message is a CANDIDATE POST, and is dropped,
+    # when it is written in the first person about the sender's own experience and availability.
+    # ---------------------------------------------------------------------------
+    candidate_post_markers:
+      ru:
+        - "ищу работу"
+        - "ищу позицию"
+        - "ищу проект"
+        - "в поиске работы"
+        - "в поиске новых возможностей"
+        - "нахожусь в поиске"
+        - "рассматриваю предложения"
+        - "открыт к предложениям"
+        - "открыта к предложениям"
+        - "буду рад обсудить"
+        - "буду рада обсудить"
+        - "буду рад общению"
+        - "резюме прикрепил"
+        - "резюме прикрепила"
+        - "моё резюме"
+        - "мое резюме"
+        - "обо мне:"
+        - "мой опыт"
+        - "готов к релокации"
+        - "готова к релокации"
+        - "если у кого-то есть"
+        - "рефералк"
+      en:
+        - "i am looking for a"
+        - "i'm looking for a"
+        - "looking for a new role"
+        - "looking for my next"
+        - "open to work"
+        - "open to offers"
+        - "available for"
+        - "my resume"
+        - "my cv is attached"
+        - "about me:"
+        - "happy to share my"
+      hashtags:
+        - "#резюме"
+        - "#cv"
+        - "#ищуработу"
+        - "#opentowork"
+        - "#ищу"
+        - "#вакансиянайдена"
+
+    # A message is a VACANCY when it describes a role someone is hiring for. These are the
+    # positive markers; a message needs at least one, and no candidate marker.
+    vacancy_markers:
+      ru: ["вакансия", "ищем", "требуется", "компания ищет", "мы ищем", "открыта вакансия",
+           "требования к кандидату", "обязанности", "мы предлагаем", "что мы предлагаем",
+           "условия", "з/п", "зарплата", "оклад", "откликнуться", "присылайте резюме",
+           "ждём ваше резюме", "локация:", "формат работы"]
+      en: ["we are looking for", "we're hiring", "we are hiring", "join our team",
+           "responsibilities", "requirements", "what we offer", "apply here", "apply now",
+           "salary", "job description", "position:", "role:"]
+
+    # Messages are pre-filtered on these before the model reads them. Set in the profile.
+    prefilter_keywords: []
+
+  # Search-engine discovery of company boards. The model searches (prompts/board_discovery.md,
+  # WebSearch with allowed_domains = one ATS); scripts/discover_boards.py turns each hit's URL
+  # into a provider + slug, verifies it against the board API and records it in
+  # state/discovered_boards.json, which collect_boards.py polls like companies.yaml.
+  #
+  # A bare `site:` operator in the query text is honoured for Greenhouse and Lever and silently
+  # ignored for Ashby and Workable, so the domain goes in the parameter, never in the query.
+  board_discovery:
+    enabled: true
+    prompt: prompts/board_discovery.md
+    every_hours: 20                # once a day: snapshots run weeks behind, boards change slowly
+    # One WebSearch call per provider per query. A provider's domains go in one call together;
+    # different providers never do (one crowds out the rest).
+    domains:
+      ashby:      [jobs.ashbyhq.com]
+      greenhouse: [job-boards.greenhouse.io, boards.greenhouse.io, job-boards.eu.greenhouse.io]
+      lever:      [jobs.lever.co]
+      workable:   [apply.workable.com]
+    # e.g. '"Analytics Engineer" remote Europe'. Set in the profile.
+    queries: []
+    # Boards that repost other companies' roles. Their postings name an agency, not an
+    # employer, and the one-row-per-company rule cannot work on them.
+    ignore_slugs: [jobgether, jobleads, crossbordertalents, deeptech-recruitment, mojorank,
+                   remotewoman, 10xteam, toptal, remote-recruitment, leverdemo-8,
+                   remotereferralboardinternaluseonly]
+    failure_mode: skip
+
+  wantapply:
+    enabled: true
+    # NOT a collector script and never will be:
+    #
+    #   1. Cloudflare hard-blocks scripted HTTP. /jobs/*, a detail page and /sitemap.xml all
+    #      return 403 "Attention Required! | Cloudflare" — to curl with a browser User-Agent,
+    #      and again with the full Chrome header set. A WAF block, not a JS challenge.
+    #      robots.txt itself ALLOWS /jobs/* — so a real browser reading the listing is exactly
+    #      what the site permits. Getting past the block is not.
+    #   2. A headless `claude -p` has no browser tools: the Chrome extension pairs with an
+    #      interactive session, and launchd does not have one.
+    #
+    # So collection and processing are split. `/wantapply` reads the listings in an
+    # interactive session with the browser open and writes state/wantapply.jsonl through
+    # scripts/wantapply_ingest.py; the scheduled run reads that file like any other source.
+    access: interactive_browser_pass
+    command: /wantapply
+    output: state/wantapply.jsonl
+    listing_urls: []              # e.g. https://wantapply.com/jobs/analytics-engineer
+    respect_robots: true          # robots.txt disallows /api/ — never call it
+    max_detail_pages_per_run: 25
+    first_run_lookback_hours: 336
+    # The file is refreshed by hand, so staleness is normal; past this the run log says so.
+    stale_after_hours: 48
+    # Detail-page slugs carry a disambiguating suffix (…-at-acme-1) and must be scraped from
+    # the listing, never constructed. Some Apply buttons sit behind a paid tier: never a
+    # purchase — the company and role are in plain text and the candidate applies on the
+    # employer's own site.
+    failure_mode: skip
+
+  # Not a vacancy source: replies to applications. Read before the tracker is written; each
+  # rejection, interview invitation, assessment, offer or application confirmation updates
+  # that company's row (Stage 5a of prompts/daily_scan.md). Gmail API with the gmail.readonly
+  # scope only — the token cannot send. Token in ~/.job_search/gmail_token.json, set up once
+  # with `uv run scripts/collect_mail.py --auth`.
+  mail:
+    enabled: true
+    collector: "uv run scripts/collect_mail.py --json state/mail.jsonl"
+    apply: "uv run scripts/sheets_apply_mail.py"
+    failure_mode: skip
+    lookback_hours: 30
+    # The first pass should reach back to the first application sent.
+    first_run_lookback_hours: 336
+
+# ---------------------------------------------------------------------------
+# Destinations. Google Sheets is the tracker and its funnel; `uv run scripts/setup_sheets.py`
+# creates it and writes spreadsheet_id into profile/sources.yaml.
+# ---------------------------------------------------------------------------
+destinations:
+  google_sheets:
+    spreadsheet_title: "Job Search Tracker"
+    spreadsheet_id: ""
+    tabs: [applications, daily_stats, funnel]
+
+# ---------------------------------------------------------------------------
+# Evaluated and rejected. Recorded so they are not re-researched later.
+# ---------------------------------------------------------------------------
+rejected_sources:
+  linkedin (logged in):
+    reason: >
+      robots.txt is "User-agent: * / Disallow: /" for the whole site, and /jobs-guest/ is
+      disallowed even for Googlebot. A logged-in session through the browser would breach the
+      User Agreement and risks restricting the account whose URL is printed on the CV. Only the
+      anonymous guest endpoint is used (sources.linkedin); the candidate browses LinkedIn
+      themselves.
+  ycombinator.com/jobs:
+    reason: "robots.txt allows /jobs and the role pages ship their listings in a data-page JSON,
+             but YC has no data or analytics role category, and the inventory is nearly all US.
+             workatastartup.com, where the full inventory lives, needs a login. YC companies
+             that post on Ashby/Greenhouse/Lever are reached by board_discovery anyway."
+  jobs.workable.com:
+    reason: "The public /api/v1/jobs search is allowed by robots.txt (only /search?… is
+             disallowed), has no Cloudflare, and returns full descriptions plus employmentType
+             and workplace. But it is the aggregate of Workable boards, most of which are
+             polled directly (companies.yaml and board_discovery); measured over six data
+             queries it found nothing new. location=<country> also misses remote roles open to
+             that country, so a collector would have to pull global remote and filter itself."
+  jobtoo.ru:
+    reason: "A client-side Expo app: robots.txt disallows /api/, which is where the listings
+             come from, and sitemap.xml carries no vacancy pages. Its abroad section is postings
+             taken from company career sites — what collect_boards.py and board_discovery read
+             at the source. jobtoo.com is behind a Cloudflare challenge."
+  hh.ru:
+    reason: "api.hh.ru returned 403 even with a compliant identifying User-Agent; and the
+             inventory is overwhelmingly Russia-only."
+  career.habr.com:
+    reason: "RSS works, but the data-role matches were Russia-only."
+  getmatch.ru:
+    reason: "JSON API works, but the role matches were Russian employers."
+  weworkremotely:
+    reason: "The RSS answers, but there is no data category: the ten newest per category. Its
+             region field is not data — 'Anywhere in the World' on roles whose own ATS board
+             says one country or one US state. Its titles are largely reposts of ATS boards
+             the pipeline polls or board_discovery reaches. Detail pages are behind a
+             Cloudflare challenge."
+  remoteok:
+    reason: "Reachable, but zero data-role matches in Europe across 170 sampled postings."

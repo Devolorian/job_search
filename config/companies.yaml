@@ -1,0 +1,526 @@
+# Companies whose career boards are polled directly.
+#
+# WHY THIS IS THE PRIMARY SOURCE (measured 2026-09-07):
+#   Generic remote boards  - 469 postings scanned -> 9 role matches, mostly noise
+#                            ("Data Analyst (No Experience Required)")
+#   Company ATS boards     - 42 companies probed  -> 26 role matches, including
+#                            "Senior Analytics Engineer - Barcelona" at Preply
+#
+# These are the official public job-board APIs of Greenhouse, Ashby, Lever and Workable.
+# No auth, no scraping, no robots.txt conflict - they exist to be read by job aggregators.
+# The provider for each company is resolved automatically and cached in
+# state/ats_boards.json; you only need to add the slug.
+#
+# To find a company's slug: open its careers page and look at the URL, e.g.
+#   job-boards.greenhouse.io/COMPANY   ->  greenhouse slug
+#   jobs.ashbyhq.com/COMPANY           ->  ashby slug
+#   jobs.lever.co/COMPANY              ->  lever slug
+#   apply.workable.com/COMPANY         ->  workable slug
+
+companies:
+
+  # --- Barcelona / Spain ------------------------------------------------------
+  - {slug: preply,      note: "Barcelona + Kyiv. Confirmed Analytics Engineer roles in BCN."}
+  - {slug: typeform,    note: "Barcelona"}
+  - {slug: travelperk,  note: "Barcelona"}
+  - {slug: factorialhr, note: "Barcelona"}
+  - {slug: glovo,       note: "Barcelona"}
+  - {slug: adevinta,    note: "Barcelona"}
+  - {slug: wallapop,    note: "Barcelona"}
+  - {slug: newrelic,    note: "Barcelona office"}
+  - {slug: redpoints,   note: "Barcelona"}
+  - {slug: seedtag,     note: "Madrid/Barcelona"}
+  - {slug: marfeel,     note: "Barcelona"}
+  - {slug: badi,        note: "Barcelona"}
+  - {slug: amenitiz,    note: "Barcelona"}
+  - {slug: cabify,      note: "Madrid"}
+  - {slug: jobandtalent, note: "Madrid"}
+
+  # --- Data-platform vendors: the densest concentration of AE roles anywhere ---
+  - {slug: dbtlabs,     note: "dbt Labs"}
+  - {slug: fivetran,    note: ""}
+  - {slug: datadog,     note: "has a Madrid office"}
+  - {slug: elastic,     note: "distributed"}
+  - {slug: grafanalabs, note: "remote-first"}
+  - {slug: snowplow,    note: ""}
+  - {slug: hightouch,   note: ""}
+  - {slug: census,      note: ""}
+  - {slug: airbyte,     note: ""}
+  - {slug: dagster,     note: ""}
+  - {slug: posthog,     note: "remote-first"}
+  - {slug: supabase,    note: "remote, global"}
+  # 2026-10-30, with the data_vendor role family: more data-tool vendors, resolved by
+  # resolve_board_slugs.py from their own careers domains. Only boards serving postings that day
+  # were taken; Metabase, Hex, Cube, Omni, Starburst, Sigma, Estuary, Atlan, Select Star and
+  # Dremio "verified" on boards with 0 jobs (dormant or someone else's) and were left out.
+  - {slug: lightdash,      provider: ashby,   note: "Lightdash — BI on dbt"}
+  - {slug: motherduck,     provider: ashby,   note: "MotherDuck — DuckDB"}
+  - {slug: astronomer,     provider: ashby,   note: "Astronomer — managed Airflow"}
+  - {slug: dlthub,         provider: workable, note: "dltHub — ingestion"}
+  - {slug: datafold,       provider: ashby,   note: "Datafold — data diffing / quality"}
+  - {slug: montecarlodata, provider: ashby,   note: "Monte Carlo — data observability"}
+  - {slug: coalesce,       provider: ashby,   note: "Coalesce — transformation"}
+
+  # --- Fintech / banking ------------------------------------------------------
+  - {slug: revolut,     note: ""}
+  - {slug: wise,        note: ""}
+  - {slug: monzo,       note: "confirmed Analytics Engineer roles, remote UK"}
+  - {slug: n26,         note: ""}
+  - {slug: qonto,       note: "Paris"}
+  - {slug: pennylane,   note: "France remote"}
+  - {slug: payhawk,     provider: personio,  note: ""}
+  - {slug: bitpanda,    note: ""}
+  - {slug: starlingbank, note: ""}
+  # FinCrime / regtech, added 2026-10-30. Resolved by resolve_board_slugs.py from 24
+  # candidates; only boards serving postings, each checked by hand against its job list. Left out: Lunar (ashby/lunar is a US
+  # healthcare company — the wrong-board case), and Feedzai, ComplyAdvantage, Adyen, Klarna,
+  # Veriff, Onfido, Alloy, Persona, Unit21, Featurespace, Fourthline, Signicat, Ravelin,
+  # Wallester, Thought Machine, Napier, which "verified" on boards with 0 jobs — their real
+  # boards are elsewhere and need finding by hand.
+  - {slug: sardine, provider: ashby,           note: "Sardine — fraud / compliance"}
+  - {slug: hawk,    provider: ashby,           note: "Hawk AI — AML, Munich (board checked 2026-10-30)"}
+  - {slug: salv,    provider: personio,        note: "Salv — AML, Tallinn"}
+  - {slug: bunq,    provider: recruitee,       note: "bunq — neobank, Amsterdam"}
+  - {slug: socure,  provider: smartrecruiters, note: "Socure — identity / KYC"}
+
+  # --- Remote-first employers of record / distributed companies ---------------
+  - {slug: gitlab,      note: "all-remote"}
+  - {slug: deel,        note: ""}
+  - {slug: oyster,      note: "EMEA"}
+  - {slug: personio,    provider: recruitee, note: "Munich/Madrid"}
+  - {slug: sennder,     note: "Berlin"}
+
+  # --- Hello New Job! 400 (newhr.org, list dated 2024-01-17) 
+  # Imported 22 slug(s) parsed straight out of an ATS URL. Country filter: EU/EEA or remote.
+  - {slug: airslate, provider: lever, note: "airSlate — USA,Poland,Philippines,Ukraine"}
+  - {slug: appfollow, provider: lever, note: "AppFollow — Finland"}
+  - {slug: apron, provider: workable, note: "Apron — UK"}
+  - {slug: bitfury, provider: greenhouse, note: "BitFury — UAE,Estonia,Serbia,Poland,Turkey,Romania"}
+  - {slug: chattermill, provider: greenhouse, note: "Chattermill — UK"}
+  - {slug: datamilkwebsite, provider: greenhouse, note: "DataMilk — Lithuania,Latvia,Estonia,Poland"}
+  - {slug: finom, provider: personio, note: "Finom — Netherlands,Cyprus,Germany"}
+  - {slug: formelskin, provider: personio, note: "FORMEL Skin — Germany"}
+  - {slug: hypemasters, provider: workable, note: "Hypemasters — UAE,UK"}
+  - {slug: improvadoio, provider: lever, note: "Improvado — Georgia,Romania,USA,Ireland,Mexico,Argentina,Uruguay,Serbia"}
+  - {slug: intento, provider: recruitee, note: "Intento — Portugal,Serbia"}
+  - {slug: lightspeedhq, provider: greenhouse, note: "Lightspeed eCom (ex-Ecwid) — Australia,UK,Germany,Netherlands,Belgium,France,Canada,New "}
+  - {slug: paltaltd, provider: greenhouse, note: "Palta — Cyprus,Poland,Serbia,Armenia,Georgia,Kazakhstan,UK,Germany,Israel"}
+  - {slug: prodlyjobs, provider: greenhouse, note: "Prodly — Cyprus,Spain,Poland,Netherlands,Portugal,Germany,UK,Canada,Greece,Mexi"}
+  - {slug: rarible, provider: lever, note: "Rarible — USA,Portugal"}
+  - {slug: temporal, provider: lever, note: "Temporal — Australia,France,UK,USA"}
+  - {slug: truv, provider: lever, note: "Truv — UK,Canada"}
+  - {slug: virtuozzo, provider: workable, note: "Virtuozzo — Bulgaria,Serbia"}
+  - {slug: volka, provider: lever, note: "VOLKA GAMES — Cyprus"}
+  - {slug: wallarm, provider: recruitee, note: "Wallarm — USA,UK"}
+  - {slug: wintermute-trading, provider: lever, note: "Wintermute — UK,Singapore"}
+  - {slug: zeroavia, provider: workable, note: "ZeroAvia — USA,UK"}
+
+  # unresolved: no ATS URL in the source, so the slug below is DERIVED FROM THE
+  # NAME and unverified. Left commented out on purpose — a wrong slug polls a
+  # different company's board and its postings look entirely real. To adopt one,
+  # open its careers page, and if the URL carries a supported board, uncomment it
+  # with the real slug.
+  # - {slug: 110industries, note: "110 Industries | bonddaria.notion.site"}
+  # - {slug: 1inchnetwork, note: "1inch Network | cryptocurrencyjobs.co"}
+  # - {slug: 3commas, note: "3Commas | careers.3commas.io"}
+  # - {slug: abbyy, note: "ABBYY | www.abbyy.com"}
+  # - {slug: abehealth, note: "Abe Health | abe-health.com"}
+  # - {slug: accelclub, note: "Accel Club | accelclub.notion.site"}
+  # - {slug: acronis, note: "Acronis | www.acronis.com"}
+  # - {slug: adtech, note: "AdTech Holding | adtechholding.com"}
+  # - {slug: affirm, note: "Affirm | www.affirm.com"}
+  # - {slug: altenar, note: "Altenar | altenar.com"}
+  # - {slug: altium, note: "Altium | careers.altium.com"}
+  # - {slug: altoros, note: "Altoros | www.altoroslabs.com"}
+  # - {slug: amega, note: "AMEGA Group | www.amegacorp.com"}
+  # - {slug: amma, note: "AMMA | amma.family"}
+  # - {slug: annamoney, note: "ANNA Money | anna.money"}
+  # - {slug: anymaster, note: "Anymaster | mixed-porter-ecb.notion.site"}
+  # - {slug: armissecurity, note: "Armis Security | www.armis.com"}
+  # - {slug: artec3d, note: "Artec 3D | careers.artec3d.com"}
+  # - {slug: asodesk, note: "Asodesk | ru.asodesk.com"}
+  # - {slug: balancy, note: "Balancy | balancy.co"}
+  # - {slug: beacon, note: "Beacon | www.beacon.com"}
+  # - {slug: beamery, note: "Beamery | careers.beamery.com"}
+  # - {slug: bigid, note: "BigID | bigid.com"}
+  # - {slug: bonrepublic, note: "Bonrepublic | www.bonrepublic.com"}
+  # - {slug: brainrocket, note: "BrainRocket | www.brainrocket.com"}
+  # - {slug: buddyai, note: "Buddy.ai | buddy.ai"}
+  # - {slug: bumble, note: "Bumble | bumble.wd3.myworkdayjobs.com"}
+  # - {slug: centro, note: "Centro (Ortnec) | www.centro.team"}
+  # - {slug: choisecom, note: "Choise.com | wellfound.com"}
+  # - {slug: clickhouse, note: "ClickHouse | clickhouse.com"}
+  # - {slug: cloudlinux, note: "CloudLinux | www.cloudlinux.com"}
+  # - {slug: cmgames, note: "CM Games | cm.games"}
+  # - {slug: coinrule, note: "Coinrule | wellfound.com"}
+  # - {slug: coinspaid, note: "CoinsPaid | jobs.eu.lever.co"}
+  # - {slug: compasspathways, note: "Compass Pathways | compasspathways.com"}
+  # - {slug: conteaipostoplan, note: "Conte.ai&Postoplan | postoplan.contenive.com"}
+  # - {slug: cooperpetcare, note: "Cooper Pet Care | cooperpetcare.com"}
+  # - {slug: cryptonstudio, note: "Crypton Studio | crypton.studio"}
+  # - {slug: crystalblockchain, note: "Crystal Blockchain | crystalblockchain.com"}
+  # - {slug: dataart, note: "DataArt | www.dataart.team"}
+  # - {slug: datagridsolutions, note: "DataGrid Solutions | datagrid.solutions"}
+  # - {slug: destinus, note: "Destinus | destinus.ch"}
+  # - {slug: devexperts, note: "Devexperts | careers.devexperts.com"}
+  # - {slug: easybrain, note: "Easybrain | easybrain.com"}
+  # - {slug: ecarstrade, note: "eCarsTrade | ecarstrade.com"}
+  # - {slug: elatra, note: "Elatra | elatra.io"}
+  # - {slug: emergingtravel, note: "Emerging Travel Group | www.emergingtravel.com"}
+  # - {slug: endel, note: "Endel | endel.io"}
+  # - {slug: enpal, note: "Enpal | www.enpal.de"}
+  # - {slug: epam, note: "EPAM | "}
+  # - {slug: eschatologyentertainment, note: "Eschatology Entertainment | eschatology-entertainment.com"}
+  # - {slug: evilmartians, note: "Evil Martians | evilmartians.com"}
+  # - {slug: exactlyai, note: "Exactly.ai (Durer Ai) | wellfound.com"}
+  # - {slug: exactpro, note: "Exactpro | careers.exactpro.com"}
+  # - {slug: exinity, note: "Exinity | group.exinity.com"}
+  # - {slug: exness, note: "Exness | exness-careers.com"}
+  # - {slug: faceapp, note: "FaceApp | www.faceapp.com"}
+  # - {slug: farel, note: "Farel | www.ycombinator.com"}
+  # - {slug: fibery, note: "Fibery | fibery.io"}
+  # - {slug: findev, note: "FinDev | findev.team"}
+  # - {slug: finerymarkets, note: "Finery Markets | finerymarkets.com"}
+  # - {slug: fintuity, note: "Fintuity | fintuity.com"}
+  # - {slug: finverity, note: "Finverity | finverity.com"}
+  # - {slug: fireartstudio, note: "Fireart Studio | fireart.studio"}
+  # - {slug: firstlinesoftware, note: "First Line Software | careers.firstlinesoftware.com"}
+  # - {slug: fjor, note: "FJOR | www.fjor.health"}
+  # - {slug: flohealth, note: "Flo Health | flo.health"}
+  # - {slug: fluently, note: "Fluently | getfluently.app"}
+  # - {slug: formlabs, note: "Formlabs | careers.formlabs.com"}
+  # - {slug: funcorp, note: "FunCorp | funcorp.dev"}
+  # - {slug: g5entertainment, note: "G5 Entertainment AB | jobs.g5.com"}
+  # - {slug: gaijinentertainment, note: "Gaijin Entertainment | gaijinent.com"}
+  # - {slug: gameram, note: "Gameram | gameram.com"}
+  # - {slug: gleragames, note: "Glera Games | glera-games.com"}
+  # - {slug: grammarly, note: "Grammarly | www.grammarly.com"}
+  # - {slug: greengrowth, note: "Green Growth | greengrowth.tech"}
+  # - {slug: greeno, note: "GreenO | greeno.ag"}
+  # - {slug: griddynamics, note: "Grid Dynamics | careers.griddynamics.com"}
+  # - {slug: gurtam, note: "Gurtam | gurtam.com"}
+  # - {slug: hapic, note: "HAPIC | hapic.com"}
+  # - {slug: hautai, note: "Haut.AI | haut.ai"}
+  # - {slug: heliogames, note: "Helio Games | heliogames.com"}
+  # - {slug: homebuddy, note: "HomeBuddy | www.homebuddy.com"}
+  # - {slug: hqsoftware, note: "HQSoftware | hqsoftwarelab.com"}
+  # - {slug: hypeauditor, note: "HypeAuditor | hypeauditor.com"}
+  # - {slug: ibraintech, note: "i-BrainTech | www.i-brain.tech"}
+  # - {slug: idwell, note: "iDWELL | www.idwell.com"}
+  # - {slug: ifarm, note: "iFarm | www.ifarm.fi"}
+  # - {slug: impress, note: "Impress | jobs.smile2impress.com"}
+  # - {slug: indrive, note: "inDrive | indrive.com"}
+  # - {slug: instories, note: "Instories | instories.app"}
+  # - {slug: intellectokids, note: "IntellectoKids | career.intellectokids.com"}
+  # - {slug: intone, note: "InTone | intone.io"}
+  # - {slug: ivmmarkets, note: "IVM Markets | www.ivmmarkets.com"}
+  # - {slug: izdatventurestudio, note: "IZDAT Venture Studio | izdat.com"}
+  # - {slug: jetbrains, note: "Jetbrains | www.jetbrains.com"}
+  # - {slug: jettycloud, note: "JettyCloud | www.jettycloud.com"}
+  # - {slug: joom, note: "Joom | www.joom-group.com"}
+  # - {slug: kadmos, note: "Kadmos | www.kadmos.io"}
+  # - {slug: kaspersky, note: "Kaspersky | careers.kaspersky.com"}
+  # - {slug: kewazo, note: "Kewazo | www.kewazo.com"}
+  # - {slug: lberblanccapital, note: "Àlber Blanc CAPITAL | alberblanc.com"}
+  # - {slug: localsorg, note: "Locals.org | locals.crew.work"}
+  # - {slug: lokalise, note: "Lokalise | lokalise.com"}
+  # - {slug: luminai, note: "Luminai | www.luminai.com"}
+  # - {slug: luxoft, note: "Luxoft | career.luxoft.com"}
+  # - {slug: machinetnet, note: "Machinet.net | www.machinet.net"}
+  # - {slug: madcurve, note: "Mad Curve | madcurve.com"}
+  # - {slug: madeonearthgames, note: "Made on Earth Games | madeonearthgames.notion.site"}
+  # - {slug: magicsquare, note: "Magic Square | career.magicsquare.io"}
+  # - {slug: manychat, note: "ManyChat | manychat.com"}
+  # - {slug: mapbox, note: "Mapbox | www.mapbox.com"}
+  # - {slug: marinedigital, note: "Marine Digital | marine-digital.com"}
+  # - {slug: mbanq, note: "Mbanq | www.mbanq.com"}
+  # - {slug: meander, note: "Meander (ex Vektor AI) | meander-hq.notion.site"}
+  # - {slug: mediacube, note: "Mediacube | mediacube.io"}
+  # - {slug: melscience, note: "MEL Science | melscience.com"}
+  # - {slug: meracux, note: "Meracux | mercaux.com"}
+  # - {slug: metapax, note: "MetaPax | metapax.io"}
+  # - {slug: migrun, note: "MigRun | www.migrun.tech"}
+  # - {slug: miro, note: "Miro | miro.com"}
+  # - {slug: mnzen, note: "Münzen | munzen.io"}
+  # - {slug: moeco, note: "Moeco | www.moeco.io"}
+  # - {slug: monetha, note: "Monetha | www.monetha.io"}
+  # - {slug: monite, note: "Monite | monite.notion.site"}
+  # - {slug: mygames, note: "MY.GAMES | my.games"}
+  # - {slug: mysky, note: "MySky | mysky.com"}
+  # - {slug: neatsy, note: "Neatsy | neatsy.notion.site"}
+  # - {slug: nebius, note: "Nebius | nebius.breezy.hr"}
+  # - {slug: neon, note: "Neon | neon.tech"}
+  # - {slug: nexters, note: "Nexters | nexters.com"}
+  # - {slug: nilfoundation, note: "Nil Foundation | nil.foundation"}
+  # - {slug: noom, note: "Noom | noom.eightfold.ai"}
+  # - {slug: not8, note: "not8 | www.not8.co"}
+  # - {slug: oneday, note: "Oneday | www.oneday.co.uk"}
+  # - {slug: onesoil, note: "OneSoil | onesoil.ai"}
+  # - {slug: onundrum, note: "Conundrum | conundrum.ai"}
+  # - {slug: orderofmeta, note: "Order of Meta | www.orderofmeta.com"}
+  # - {slug: originalgames, note: "Original Games | originalgames.io"}
+  # - {slug: osome, note: "Osome | careers.osome.com"}
+  # - {slug: oxygen, note: "Oxygen | oxygen.us"}
+  # - {slug: p2pvalidator, note: "P2P Validator | p2porg.global.huntflow.io"}
+  # - {slug: pagoda, note: "Pagoda (ex NEAR Protocol) | www.pagoda.co"}
+  # - {slug: pandadoc, note: "PandaDoc | www.pandadoc.com"}
+  # - {slug: peopleai, note: "People AI | people.ai"}
+  # - {slug: picsart, note: "Picsart | picsart.com"}
+  # - {slug: pitchmeco, note: "PitchMe.co | pitchme.co"}
+  # - {slug: pixellu, note: "Pixellu | careers.pixellu.com"}
+  # - {slug: planner5d, note: "Planner 5D | planner5d.multiscreensite.com"}
+  # - {slug: playkot, note: "Playkot | playkot.com"}
+  # - {slug: playrix, note: "Playrix | playrix.com"}
+  # - {slug: plesk, note: "Plesk | www.plesk.com"}
+  # - {slug: podcastle, note: "Podcastle | podcastle.ai"}
+  # - {slug: prismalabs, note: "Prisma Labs | prismalabs.notion.site"}
+  # - {slug: qonversion, note: "Qonversion | angel.co"}
+  # - {slug: quadcode, note: "Quadcode | jobs.quadcode.com"}
+  # - {slug: quantori, note: "Quantori | career.quantori.com"}
+  # - {slug: quantumsoft, note: "QuantumSoft | www.quantumsoft.pro"}
+  # - {slug: rapyd, note: "Rapyd | www.rapyd.net"}
+  # - {slug: rebelsai, note: "Rebels.ai | rebels.ai"}
+  # - {slug: retailrocket, note: "Retail Rocket | retailrocket.pt"}
+  # - {slug: revealbot, note: "Revealbot | revealbot.com"}
+  # - {slug: segmentstream, note: "SegmentStream | segmentstream.com"}
+  # - {slug: semrush, note: "Semrush | careers.semrush.com"}
+  # - {slug: seneka, note: "Seneka | www.seneka.life"}
+  # - {slug: sensorium, note: "Sensorium | sensoriumxr.com"}
+  # - {slug: sidestream, note: "SIDESTREAM | join.com"}
+  # - {slug: silananotechnologies, note: "Sila Nanotechnologies | www.silanano.com"}
+  # - {slug: skich, note: "Skich | skich.notion.site"}
+  # - {slug: slash, note: "Slash | discoteam.notion.site"}
+  # - {slug: soax, note: "SOAX | soax.com"}
+  # - {slug: socialdiscovery, note: "Social Discovery Group | socialdiscoverygroup.com"}
+  # - {slug: soft2bet, note: "Soft2Bet | www.soft2bet.com"}
+  # - {slug: softr, note: "Softr | www.softr.io"}
+  # - {slug: soula, note: "Soula | soula.care"}
+  # - {slug: space307, note: "Space307 | space307.team"}
+  # - {slug: spatialchat, note: "SpatialChat | www.spatial.chat"}
+  # - {slug: sprintty, note: "Sprintty | sprintty.com"}
+  # - {slug: spryker, note: "Spryker | spryker.com"}
+  # - {slug: stakewise, note: "StakeWise | wellfound.com"}
+  # - {slug: sumsub, note: "Sumsub | sumsub.com"}
+  # - {slug: superannotate, note: "SuperAnnotate | www.superannotate.com"}
+  # - {slug: svmd, note: "SVMD | svmd.io"}
+  # - {slug: symfa, note: "Symfa | symfa.com"}
+  # - {slug: synthesized, note: "Synthesized | www.synthesized.io"}
+  # - {slug: tabby, note: "Tabby | tabby.ai"}
+  # - {slug: thesoulpublishing, note: "TheSoul Publishing | www.jointhesoul.com"}
+  # - {slug: toloka, note: "Toloka | toloka.ai"}
+  # - {slug: toughbyte, note: "Toughbyte | www.toughbyte.com"}
+  # - {slug: tradingview, note: "TradingView | www.tradingview.com"}
+  # - {slug: uitrial, note: "Uitrial | uitrial.com"}
+  # - {slug: ultimateguitar, note: "Ultimate Guitar (Muse Group) | mu.se"}
+  # - {slug: unlimint, note: "Unlimint | www.unlimint.com"}
+  # - {slug: velvetech, note: "Velvetech | www.velvetech.com"}
+  # - {slug: veryfi, note: "Veryfi | www.ycombinator.com"}
+  # - {slug: vividmoney, note: "Vivid Money | careers.vivid.money"}
+  # - {slug: wargaming, note: "Wargaming | wargaming.com"}
+  # - {slug: wayray, note: "WayRay | wayray.com"}
+  # - {slug: wheely, note: "Wheely | wheely.com"}
+  # - {slug: windyapp, note: "WINDY APP | windy.app"}
+  # - {slug: wizart, note: "Wizart | wizart.ai"}
+  # - {slug: wrike, note: "Wrike | www.wrike.com"}
+  # - {slug: xtxmarkets, note: "XTX Markets | www.xtxmarkets.com"}
+  # - {slug: yoffix, note: "Yoffix | yoffix.com"}
+  # - {slug: yukon, note: "Yukon Group | yukongroup.eu"}
+  # - {slug: zededa, note: "Zededa | zededa.com"}
+  # - {slug: zenpulsar, note: "ZenPulsar | zenpulsar.com"}
+  # - {slug: zeptolab, note: "ZeptoLab | careers.zeptolab.com"}
+  # - {slug: zero10, note: "ZERO10 | zero10.notion.site"}
+
+  # --- idagent.pro 222 (Russian-speaking founding teams, regions Remote/EU/Global) 
+  # Imported 82 slug(s) parsed straight out of an ATS URL. Country filter: EU/EEA or remote.
+  - {slug: 1inch, provider: lever, note: "1inch — Global, Remote"}
+  - {slug: abbyy, provider: greenhouse, note: "ABBYY — Global, Hybrid"}
+  - {slug: adapty, provider: workable, note: "Adapty — US, EU, Remote"}
+  - {slug: admitad, provider: workable, note: "Admitad — EU, Remote"}
+  - {slug: adyen, provider: greenhouse, note: "Adyen — Global, Hybrid"}
+  - {slug: ajax, provider: ashby, note: "Ajax Systems — EU, Remote"}
+  - {slug: andersen, provider: workable, note: "Andersen — EU, Remote"}
+  - {slug: bolt, provider: personio, note: "Bolt — EU, Africa, Remote"}
+  - {slug: capital, provider: lever, note: "Capital.com — UK, EU, Remote"}
+  - {slug: celonis, provider: greenhouse, note: "Celonis — EU, US, Remote"}
+  - {slug: ciklum, provider: workable, note: "Ciklum — EU, Remote"}
+  - {slug: clickhouse, provider: ashby, note: "ClickHouse — US, EU, Remote"}
+  - {slug: cloudlinux, provider: workable, note: "CloudLinux — US, EU, Remote"}
+  - {slug: codesignal, provider: workable, note: "CodeSignal — US, Remote"}
+  - {slug: coherentsolutions, provider: greenhouse, note: "Coherent Solutions — US, EU, Remote"}
+  - {slug: competera, provider: workable, note: "Competera — EU, Remote"}
+  - {slug: deliveroo, provider: greenhouse, note: "Deliveroo — EU, Hybrid"}
+  - {slug: deliveryhero, provider: smartrecruiters, note: "Delivery Hero — EU, Global"}
+  - {slug: devexperts, provider: smartrecruiters, note: "Devexperts — EU, Remote"}
+  - {slug: doctolib, provider: greenhouse, note: "Doctolib — EU"}
+  - {slug: eleks, provider: lever, note: "ELEKS — EU, Remote"}
+  - {slug: epam, provider: workable, note: "EPAM — Global, Hybrid"}
+  - {slug: fin, provider: ashby, note: "Findev — EU, Грузия, Армения, Сербия"}
+  - {slug: flohealth, provider: greenhouse, note: "Flo Health — EU, US, Remote"}
+  - {slug: fondy, provider: smartrecruiters, note: "Fondy — EU, Remote"}
+  - {slug: freshworks, provider: smartrecruiters, note: "Freshworks — US, India, Remote"}
+  - {slug: gcore, provider: smartrecruiters, note: "Gcore — EU, Global, Remote"}
+  - {slug: getyourguide, provider: greenhouse, note: "GetYourGuide — EU, Remote"}
+  - {slug: gismart, provider: ashby, note: "Gismart — EU, Remote"}
+  - {slug: globallogic, provider: workable, note: "GlobalLogic — Global, Remote"}
+  - {slug: grab, provider: smartrecruiters, note: "Grab — SEA, Remote"}
+  - {slug: grammarly, provider: workable, note: "Grammarly — US, EU, Remote"}
+  - {slug: groupib, provider: greenhouse, note: "Group-IB — SEA, EU, ME, Remote"}
+  - {slug: hacken, provider: workable, note: "Hacken — EU, Remote"}
+  - {slug: headway, provider: ashby, note: "Headway — Remote, Hybrid"}
+  - {slug: infopulse, provider: workable, note: "Infopulse — EU, Remote"}
+  - {slug: innovecs, provider: greenhouse, note: "Innovecs — US, EU, Remote"}
+  - {slug: innowise, provider: workable, note: "Innowise — EU, Remote"}
+  - {slug: intellias, provider: workable, note: "Intellias — EU, Remote"}
+  - {slug: itechart, provider: workable, note: "iTechArt — EU, US, Remote"}
+  - {slug: jetbrains, provider: greenhouse, note: "JetBrains — EU, Remote"}
+  - {slug: joom, provider: smartrecruiters, note: "Joom — EU, Remote"}
+  - {slug: kaspersky, provider: workable, note: "Kaspersky — Global, Hybrid"}
+  - {slug: kommo, provider: workable, note: "Kommo — Global, Remote"}
+  - {slug: lokalise, provider: greenhouse, note: "Lokalise — EU, Remote"}
+  - {slug: macpaw, provider: workable, note: "MacPaw — EU, Remote"}
+  - {slug: mirantis, provider: workable, note: "Mirantis — US, EU, Remote"}
+  - {slug: miro, provider: workable, note: "Miro — Global, Remote"}
+  - {slug: mollie, provider: ashby, note: "Mollie — EU, Remote"}
+  - {slug: n-ix, provider: workable, note: "N-iX — EU, US, Remote"}
+  - {slug: nebius, provider: greenhouse, note: "Nebius — EU, Israel"}
+  - {slug: neon, provider: ashby, note: "Neon — Global, Remote"}
+  - {slug: netcracker, provider: greenhouse, note: "Netcracker — US, EU, Remote"}
+  - {slug: pandadoc, provider: greenhouse, note: "PandaDoc — Global, Remote"}
+  - {slug: percona, provider: ashby, note: "Percona — Global, Remote"}
+  - {slug: picsart, provider: greenhouse, note: "PicsArt — Global, Hybrid"}
+  - {slug: pipedrive, provider: lever, note: "Pipedrive — EU, Remote"}
+  - {slug: prisma, provider: greenhouse, note: "Prisma Labs — Remote"}
+  - {slug: readdle, provider: workable, note: "Readdle — EU, Remote"}
+  - {slug: reply, provider: workable, note: "Reply.io — EU, Remote"}
+  - {slug: restream, provider: ashby, note: "Restream — Remote"}
+  - {slug: ringcentral, provider: workable, note: "RingCentral — US, EU, Remote"}
+  - {slug: semrush, provider: workable, note: "Semrush — EU, US, Remote"}
+  - {slug: servicetitan, provider: workable, note: "ServiceTitan — US, Armenia, Remote"}
+  - {slug: sigmasoftware, provider: smartrecruiters, note: "Sigma Software — EU, Remote"}
+  - {slug: singlestore, provider: greenhouse, note: "SingleStore — US, EU, Remote"}
+  - {slug: socialquantum, provider: smartrecruiters, note: "Social Quantum — EU, Remote"}
+  - {slug: solidgate, provider: ashby, note: "Solidgate — EU, ME, Remote"}
+  - {slug: splitmetrics, provider: ashby, note: "SplitMetrics — EU, Remote"}
+  - {slug: supercell, provider: ashby, note: "Supercell — EU, Hybrid"}
+  - {slug: toloka, provider: greenhouse, note: "Toloka — EU, Remote"}
+  - {slug: trivago, provider: greenhouse, note: "Trivago — EU, Hybrid"}
+  - {slug: uipath, provider: ashby, note: "UiPath — EU, US, Remote"}
+  - {slug: unlimit, provider: lever, note: "Unlimit — Global, Remote"}
+  - {slug: veriff, provider: greenhouse, note: "Veriff — EU, Remote"}
+  - {slug: verygoodsecurity, provider: lever, note: "Very Good Security — US, Remote"}
+  - {slug: vivid, provider: ashby, note: "Vivid Money — EU, Remote"}
+  - {slug: wheely, provider: greenhouse, note: "Wheely — EU, Remote"}
+  - {slug: whitebit, provider: greenhouse, note: "WhiteBIT — EU, Remote"}
+  - {slug: wrike, provider: greenhouse, note: "Wrike — US, EU, Remote"}
+  - {slug: xsolla, provider: lever, note: "Xsolla — US, EU, Remote"}
+  - {slug: zerion, provider: lever, note: "Zerion — Global, Remote"}
+
+  # --- hellonewjob 400 — resolved by domain probe, 2026-09-21 
+  # Imported 26 slug(s) parsed straight out of an ATS URL. Country filter: EU/EEA or remote.
+  - {slug: 3commas, provider: ashby, note: "3Commas — Estonia"}
+  - {slug: affirm, provider: greenhouse, note: "Affirm — USA,UK,Poland,Canada,Spain"}
+  - {slug: altium, provider: greenhouse, note: "Altium — China,USA,India,Germany,UK,Poland,Serbia,Australia"}
+  - {slug: amma, provider: ashby, note: "AMMA — Mexico,Armenia,UK,Spain"}
+  - {slug: armis, provider: smartrecruiters, note: "Armis Security — Israel,Germany,USA,Ireland,UK,Georgia,France"}
+  - {slug: beamery, provider: smartrecruiters, note: "Beamery — UK,USA"}
+  - {slug: bigid, provider: greenhouse, note: "BigID — UK,Portugal,Israel,Netherlands,USA,Poland"}
+  - {slug: compasspathways, provider: greenhouse, note: "Compass Pathways — UK,USA"}
+  - {slug: easybrain, provider: lever, note: "Easybrain — Cyprus"}
+  - {slug: enpal, provider: ashby, note: "Enpal — Germany,Italy"}
+  - {slug: exinity, provider: smartrecruiters, note: "Exinity — Hong Kong,UAE,UK,Cyprus,Mauritius"}
+  - {slug: exness, provider: workable, note: "Exness — Cyprus,MENA"}
+  - {slug: formlabs, provider: greenhouse, note: "Formlabs — USA,Hungary,Germany,France"}
+  - {slug: kadmos, provider: smartrecruiters, note: "Kadmos — Germany,UK"}
+  - {slug: locals, provider: greenhouse, note: "Locals.org — UK,Cyprus"}
+  - {slug: luminai, provider: ashby, note: "Luminai — USA,UK"}
+  - {slug: manychat, provider: greenhouse, note: "ManyChat — USA,Armenia,Spain"}
+  - {slug: mapbox, provider: ashby, note: "Mapbox — USA,Finland,Japan,Poland,UK"}
+  - {slug: planner5d, provider: lever, note: "Planner 5D — Netherlands,Spain,Serbia,Estonia,Poland,Georgia"}
+  - {slug: playkot, provider: workable, note: "Playkot — Serbia,Cyprus"}
+  - {slug: rebelsai, provider: recruitee, note: "Rebels.ai — Serbia,Spain"}
+  - {slug: silananotechnologies, provider: greenhouse, note: "Sila Nanotechnologies — USA,Germany"}
+  - {slug: soax, provider: smartrecruiters, note: "SOAX — UK"}
+  - {slug: soft2bet, provider: greenhouse, note: "Soft2Bet — Malta,Cyprus"}
+  - {slug: spryker, provider: greenhouse, note: "Spryker — Germany,Australia,USA,New Zealand"}
+  - {slug: superannotate, provider: lever, note: "SuperAnnotate — USA,Sweden,Armenia"}
+
+  # --- "Remote-worker life hacks" community list (Google Sheet, remote-or-Spain) 
+  # Imported 18 slug(s) parsed straight out of an ATS URL. Country filter: EU/EEA or remote.
+  - {slug: admirals, provider: workable, note: "Admirals — Remote; Cyprus; Estonia; Romania; Bulgaria"}
+  - {slug: datamilk, provider: workable, note: "DataMilk — Lithuania; Latvia; Estonia; Poland; Remote Europe"}
+  - {slug: foundation, provider: workable, note: "Foundation — Remote WW"}
+  - {slug: funcorp, provider: workable, note: "Funcorp — Cyprus; USA; Remote; Remote WW"}
+  - {slug: fxpro, provider: greenhouse, note: "FxPro — Cyprus; Dubai; Remote; Turkey; Japan; Indonesia; UK"}
+  - {slug: improvado, provider: smartrecruiters, note: "Improvado — Georgia; Romania; USA; Ireland; Mexico; Argentina; Uruguay; Serbia; Re"}
+  - {slug: intellectokids, provider: workable, note: "Intellectokids — Remote; UK; Europe; LATAM; USA"}
+  - {slug: kodland, provider: workable, note: "Kodland — LATAM; Italy; Poland; Indonesia; Turkey; Spain; CIS; Remote"}
+  - {slug: moonpay, provider: workable, note: "MoonPay — Remote"}
+  - {slug: ox, provider: workable, note: "ox — Remote; Poland; Netherlands; Kazakhstan; Uzbekistan"}
+  - {slug: quadcode, provider: workable, note: "Quadcode — Cyprus; Latvia; Lithuania; Slovenia; Spain; UK; Thailand; Croatia; Nor"}
+  - {slug: sleepdoctor, provider: greenhouse, note: "SleepDoctor — Armenia; Remote; France"}
+  - {slug: sweatcoin, provider: workable, note: "Sweatcoin — UK; Portugal; Remote"}
+  - {slug: teleperformance, provider: workable, note: "Teleperformance — Remote; Portugal; Spain; Switzerland; Egypt"}
+  - {slug: traceair, provider: recruitee, note: "Traceair — Remote; Spain; USA; Serbia; Portugal; Mexico; Georgia; Bulgaria; Armen"}
+  - {slug: wallester, provider: workable, note: "Wallester — Estonia; Remote"}
+  - {slug: xometry, provider: greenhouse, note: "Xometry — USA; Remote; Spain; Serbia; Portugal; Armenia; Kazakhstan; Germany; Po"}
+  - {slug: zalando, provider: workable, note: "Zalando — Portugal; Remote WW; Remote"}
+
+  # --- Barcelona employers (Built In Barcelona + hand list, resolved 2026-10-19) 
+  # Imported 24 slug(s) parsed straight out of an ATS URL. Country filter: EU/EEA or remote.
+  # 70 candidates probed: every Barcelona-located employer on Built In's Barcelona data listing
+  # plus a hand list of Barcelona tech employers. Only boards that SERVED postings went in.
+  # Seven were first "verified" on an empty Workable/Greenhouse account and re-probed; they
+  # actually post on the provider named below (Docplanner, Lodgify, Veepee, Rover, SeQura and
+  # EcoVadis among them). Left out, alive but empty on all eight providers (their real board is Workday or their
+  # own site): Ocado Technology, Vistaprint, Wallbox, Holaluz, Hotelbeds, Skyscanner, Socialpoint,
+  # Ironhack, Scopely, Zynga, Ubisoft, BizAway, Thoughtworks, Proton, Amplemarket, Lifebit,
+  # Thunes, Criteo, Lighthouse, REVER, TheFork, Wizeline, Tiger Analytics, Auctane, adm Group.
+  # `king` was REJECTED: the Workable board of that name belongs to "KING ICT", not King.
+  - {slug: ailylabs, provider: personio, note: "Aily Labs — Spain"}
+  - {slug: bynder, provider: ashby, note: "Bynder — Spain"}
+  - {slug: dlocal, provider: lever, note: "dLocal — Spain"}
+  - {slug: docplanner, provider: ashby, note: "Docplanner — Spain"}
+  - {slug: ecovadis, provider: smartrecruiters, note: "EcoVadis — Spain"}
+  - {slug: exoticca, provider: workable, note: "Exoticca — Spain"}
+  - {slug: fusionconsulting, provider: smartrecruiters, note: "Fusion Consulting — Spain"}
+  - {slug: holded, provider: recruitee, note: "Holded — Spain"}
+  - {slug: hostaway, provider: recruitee, note: "Hostaway — Spain"}
+  - {slug: joko, provider: ashby, note: "Joko — Spain"}
+  - {slug: kantox, provider: workable, note: "Kantox — Spain"}
+  - {slug: keyrock, provider: ashby, note: "Keyrock — Spain"}
+  - {slug: lengow, provider: workable, note: "Lengow — Spain"}
+  - {slug: lodgify, provider: lever, note: "Lodgify — Spain"}
+  - {slug: plainconcepts, provider: workable, note: "Plain Concepts — Spain"}
+  - {slug: rover, provider: lever, note: "Rover — Spain"}
+  - {slug: saleslayer, provider: personio, note: "Sales Layer — Spain"}
+  - {slug: satispay, provider: ashby, note: "Satispay — Spain"}
+  - {slug: sequra, provider: recruitee, note: "SeQura — Spain"}
+  - {slug: tinybird, provider: lever, note: "Tinybird — Spain"}
+  - {slug: titanos, provider: workable, note: "Titan OS — Spain"}
+  - {slug: veepee, provider: lever, note: "Veepee — Spain"}
+  - {slug: veeva, provider: lever, note: "Veeva — Spain"}
+  - {slug: visium, provider: workable, note: "Visium — Spain"}
+
+  # --- Added by hand 2026-10-26 (a relevant posting was seen on each board) ------------
+  # Constructor was already polled through search discovery (state/discovered_boards.json,
+  # 2026-10-21); it is pinned here so a reset of that file cannot lose it. Collectly's Lever
+  # slug is case-sensitive: "collectlyinc" answers with an error, "CollectlyInc" with 11 postings.
+  - {slug: constructor, provider: ashby, name: Constructor, note: "Constructor — fully remote; postings name one country each (Brazil, …)"}
+  - {slug: CollectlyInc, provider: lever, name: Collectly, note: "Collectly — US healthcare RCM; engineering remote GMT-7..GMT+4, Belgrade"}
+
+# Slugs that resolved to no board on the last run are listed here by the collector so you
+# can fix or drop them, rather than silently polling nothing every night.
+
+# ---------------------------------------------------------------------------
+# These have no reachable public board API under any slug I could find - they are on
+# Workday or their own system. Not deleted, because each is worth a manual look: open the
+# careers page, and if the URL contains job-boards.greenhouse.io / jobs.ashbyhq.com /
+# jobs.lever.co / apply.workable.com / jobs.smartrecruiters.com / *.recruitee.com /
+# *.jobs.personio.de, the slug is right there and the company can move up into the list.
+#
+# The Barcelona-based ones in this list: travelperk, factorialhr, glovo,
+# adevinta, redpoints, seedtag, marfeel, badi.
+#
+# unreachable_2026_09_07:
+#   travelperk factorialhr glovo adevinta redpoints seedtag marfeel badi
+#   dbtlabs snowplow census dagster revolut starlingbank deel sennder

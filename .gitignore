@@ -1,0 +1,41 @@
+# Secrets never live here — they are in ~/.job_search/ (mode 700). This is belt and braces.
+.env
+.env.*
+*.env
+*credentials*.json
+*service-account*.json
+*service_account*.json
+*token*.json
+*client_secret*.json
+*session*.txt
+
+# The candidate: CV bank, search profile, documents, decisions. Never published.
+/profile/
+
+# Run artifacts: scraped postings, tailored CVs with contact details, state, logs.
+/vacancies/
+/state/
+/logs/
+
+# Documents and images anywhere else are personal by default.
+*.pdf
+*.docx
+*.doc
+*.png
+*.PNG
+*.jpg
+*.jpeg
+*.heic
+
+# Local tooling
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+.idea/
+.vscode/
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+*.bak
+*.bak_*
+*.bak-*

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{NAME}} — CV</title>
+<style>
+/* ATS-safe template. Every rule here is load-bearing — see rules/ats_rules.md.
+   Single column, no tables, no text boxes, no images, no header/footer, no ligatures. */
+
+@page {
+  size: A4;
+  margin: 12mm 13mm 11mm 13mm;   /* content only; Chrome runs with --no-pdf-header-footer */
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+}
+
+body {
+  /* Rule 7: system-safe font. Arial is present on every ATS parsing host. */
+  font-family: Arial, Helvetica, sans-serif;
+  /* Rule 10: ligature substitution silently drops fi/fl/ff glyphs on PDF export,
+     turning "profile" into "prole" in the extracted text. */
+  font-variant-ligatures: none;
+  -webkit-font-variant-ligatures: none;
+  font-kerning: none;
+  /* Rule 8: body >= 10pt. */
+  font-size: 10.5pt;
+  line-height: 1.3;
+  color: #000000;          /* pure black only — no light greys that read as hidden text */
+}
+
+/* ---- Contact block: plain body text at the top of page 1 (rule 23) ---- */
+.name {
+  font-size: 16pt;
+  font-weight: bold;
+  margin: 0 0 1pt 0;
+  letter-spacing: 0;
+}
+.headline {
+  font-size: 11.5pt;
+  font-weight: bold;
+  margin: 0 0 3pt 0;
+}
+.contact {
+  font-size: 10pt;
+  margin: 0 0 2pt 0;
+}
+
+/* ---- Sections. Headings are exact dictionary strings (rule 14). ---- */
+h2 {
+  font-size: 11pt;
+  font-weight: bold;
+  text-transform: uppercase;
+  /* Tuned to fit one page (CLAUDE.md rule 5). This is whitespace, not type size: the body
+     stays at 10.5pt, well above the 10pt floor in ATS rule 8. Adjust here if the layout
+     needs to change — never squeeze a single render. */
+  margin: 8pt 0 3pt 0;
+  padding: 0 0 2pt 0;
+  border-bottom: 0.75pt solid #000000;   /* a rule, not a table or graphic */
+  page-break-after: avoid;
+}
+
+/* ---- Work experience entries ---- */
+.role {
+  margin: 0 0 5pt 0;
+  page-break-inside: avoid;
+}
+
+/* Keeps a section heading with the block it introduces, so Education never strands its
+   heading at the foot of the page. */
+.block {
+  page-break-inside: avoid;
+}
+.role-line {
+  font-weight: bold;
+  margin: 0;
+}
+.role-meta {
+  margin: 0 0 2pt 0;
+  font-size: 10pt;
+}
+
+/* ---- Bullets ----
+   Deliberately NOT <ul>/<li>. A CSS list marker is a separate text run from its
+   content, which is exactly how the previous CV ended up extracting as
+   "● ● ●" followed by three detached sentences. Putting the U+2022 inside the
+   same paragraph guarantees marker and text stay adjacent in the text layer. */
+.bullet {
+  margin: 0 0 1.5pt 0;
+  padding-left: 11pt;
+  text-indent: -11pt;
+}
+
+.skills-line {
+  margin: 0 0 2pt 0;
+}
+.skills-line .label {
+  font-weight: bold;
+}
+
+.summary {
+  margin: 0;
+  text-align: left;    /* never justified — justification distorts extracted spacing */
+}
+
+p { orphans: 2; widows: 2; }
+</style>
+</head>
+<body>
+{{CONTENT}}
+</body>
+</html>

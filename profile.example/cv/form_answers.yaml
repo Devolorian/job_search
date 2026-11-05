@@ -1,0 +1,35 @@
+# Standing answers to application-form questions (form-answers skill). A TODO is asked of the
+# candidate, never filled in by the model.
+
+identity:
+  full_name: "Jane Doe"
+  email: "jane.doe@example.com"
+  phone: "+49 30 0000 0000"
+  location: "Berlin, Germany"
+  linkedin: "https://www.linkedin.com/in/example"
+
+work_authorization:
+  home_country: "Yes — EU citizen, no sponsorship needed"
+  eu_outside_home: "Yes — EU citizen"
+  requires_sponsorship: "No"
+
+availability:
+  notice_period: "TODO"
+  earliest_start: "TODO"
+
+compensation:
+  expected_salary: "TODO"
+
+employment_type: "Permanent employment preferred"
+
+work_format: "Remote in Europe, or hybrid in Berlin"
+
+languages: "English (C1), German (native)"
+
+education: "BA, Communication Design"
+
+how_did_you_hear:
+  default: "Your careers page"
+  linkedin: "LinkedIn"
+
+self_identification: "Prefer not to say"
