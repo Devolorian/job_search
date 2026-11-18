@@ -22,10 +22,10 @@ What gets written, and the rules that keep it honest:
                application was sent — the one case where the pipeline may write B.
                L Stage reached = "Applied".
   assessment   L = "Assessment"      J Status = "Assessment"
-  interview    L = "Interview"       J = "Interview"   (the funnel counts L == "Interview")
+  interview    L = "Interview"       J = "Interview"   (funnel_report counts L == "Interview")
   offer        L = "Offer"           J = "Offer"
   rejected     L = "declined" (the tracker's word for it) — unless an interview was already
-               reached, because L is the furthest stage and the funnel's interview count reads
+               reached, because L is the furthest stage and funnel_report's interview count reads
                it. J = "Rejected" either way.
   recruiter_reply  J = "Replied"; L unchanged.
   Every event except `applied` sets K First reply on, if K is empty.
@@ -33,7 +33,7 @@ What gets written, and the rules that keep it honest:
   - Nothing is ever downgraded. L only moves forward: Applied < Assessment < Interview < Offer.
   - L is overwritten only when it is empty or already holds one of the values above. Hand
     notes there (e.g. "spanish") are never replaced — the event
-    still goes to J and to the mail_log tab.
+    still goes to J.
   - J is overwritten only from "Prepared", empty, or a value this script writes. "skipped"
     and anything else typed by hand stays.
   - Never column M (Notes — the idempotency key of sheets_add_applications.py) and never N
@@ -41,22 +41,32 @@ What gets written, and the rules that keep it honest:
   - Columns are resolved by header name.
   - A company with two rows and no role that picks one is ambiguous: logged, not written.
 
-Every event with a company, matched or not, gets a row in the `mail_log` tab — the audit trail
-of what the pipeline changed and why. Handled message ids go into state/mail_seen.json only
-after the sheet write succeeds, so a failed run re-reads them.
+Every event is printed with what it changed (the run log keeps it); the tracker has one tab
+and no log tab since 2026-11-18. Handled message ids go into state/mail_seen.json only after
+the sheet write succeeds, so a failed run re-reads them.
+
+An interview invitation or an offer is also pushed to the candidate's private chat with their
+bot (~/.job_search/telegram_bot.env, the chat tg_notify.py posts vacancy cards into) — once per
+email, after the sheet write, whether or not the company has a tracker row. No bot configured,
+or the Bot API failing, costs the push only: the sheet and mail_seen are already written.
 
 Usage:
     uv run scripts/sheets_apply_mail.py --dry-run
     uv run scripts/sheets_apply_mail.py
+    uv run scripts/sheets_apply_mail.py --no-push     # backfill of old mail
 """
 
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import os
 import re
 import sys
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import date
 from pathlib import Path
 
@@ -72,13 +82,11 @@ MAIL = ROOT / "state" / "mail.jsonl"
 DECISIONS = ROOT / "state" / "mail_decisions.json"
 SEEN = ROOT / "state" / "mail_seen.json"
 ENV_FILE = Path.home() / ".job_search" / "sheets.env"
+BOT_ENV = Path.home() / ".job_search" / "telegram_bot.env"
+PUSH_EVENTS = {"interview": "🔔 Приглашение на собеседование", "offer": "🎉 Оффер"}
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-# One tab per track (search_profile.yaml tracks); the default track's tab first.
-TRACKER_TABS = [t["tab"] for t in jobprofile.tracks()]
-LOG_TAB = "mail_log"
-LOG_HEADER = ["Logged on", "Email date", "Company", "Role", "Event", "From", "Subject",
-              "Change", "Evidence"]
+TAB = jobprofile.tracker_tab()
 
 EVENTS = {"applied", "rejected", "interview", "assessment", "offer", "recruiter_reply", "none"}
 STAGE_OF = {"applied": "Applied", "assessment": "Assessment", "interview": "Interview",
@@ -119,6 +127,46 @@ def creds():
     return service_account.Credentials.from_service_account_info(info, scopes=SCOPES)
 
 
+def push(items: list[tuple[dict, dict, str]]) -> set[str]:
+    """Send one bot message per (decision, mail record, tracker role). Returns the ids sent.
+
+    Same chat and same env file as tg_notify.py; the token is in the URL, so an error prints
+    the method and status only."""
+    env = {}
+    if BOT_ENV.exists():
+        for line in BOT_ENV.read_text(encoding="utf-8").splitlines():
+            if line.strip() and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                env[k.strip()] = v.strip().strip('"').strip("'")
+    token, chat = env.get("TELEGRAM_BOT_TOKEN"), env.get("TELEGRAM_BOT_CHAT_ID")
+    if not (token and chat):
+        print(f"  ! {len(items)} interview/offer push(es) not sent: no TELEGRAM_BOT_TOKEN / "
+              f"TELEGRAM_BOT_CHAT_ID in {BOT_ENV}", file=sys.stderr)
+        return set()
+    e = lambda s: html.escape(str(s or "").strip(), quote=False)
+    sent = set()
+    for d, m, role in items:
+        lines = [f"<b>{PUSH_EVENTS[d['event']]}</b>",
+                 f"<b>{e(d.get('company') or 'компания не определена')}</b>"
+                 + (f" — {e(role)}" if role else ""),
+                 f"Письмо от {e(d['date'])}: {e(m['from'])}",
+                 f"Тема: {e(m['subject'])}"]
+        if d.get("evidence"):
+            lines += ["", f"«{e(d['evidence'][:300])}»"]
+        data = urllib.parse.urlencode({
+            "chat_id": chat, "text": "\n".join(lines), "parse_mode": "HTML",
+            "link_preview_options": json.dumps({"is_disabled": True})}).encode()
+        try:
+            with urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage",
+                                        data=data, timeout=30):
+                sent.add(d["id"])
+        except (urllib.error.URLError, OSError) as ex:
+            code = getattr(ex, "code", type(ex).__name__)
+            print(f"  ! push for {d.get('company')} not sent: Bot API sendMessage {code}",
+                  file=sys.stderr)
+    return sent
+
+
 def a1(idx: int) -> str:
     s = ""
     idx += 1
@@ -128,35 +176,36 @@ def a1(idx: int) -> str:
     return s
 
 
-def pick_row(rows: list[list[str]], col: dict, company: str, role: str) -> tuple[int | None, str]:
-    """Index into rows, or None with the reason."""
-    def cell(r, name):
-        i = col[name]
-        return r[i].strip() if len(r) > i else ""
+def pick_row(col: dict, rows: list, company: str, role: str) -> tuple[int | None, str]:
+    """(index into rows), or (None, reason).
 
-    hits = [i for i, r in enumerate(rows) if norm_company(cell(r, "Company")) == norm_company(company)]
+    A company with two rows (Constructor as an analytics engineer and as a data engineer) has
+    its reply matched by role, then by which of them was applied to."""
+    def cell(i, name):
+        r, c = rows[i], col[name]
+        return r[c].strip() if len(r) > c else ""
+
+    hits = [i for i in range(len(rows))
+            if norm_company(cell(i, "Company")) == norm_company(company)]
     if not hits:
         return None, "no tracker row"
-    if len(hits) == 1:
-        return hits[0], ""
     if role:
         nr = norm_role(role)
-        by_role = [i for i in hits if norm_role(cell(rows[i], "Role")) == nr] or \
-                  [i for i in hits if nr and (nr in norm_role(cell(rows[i], "Role"))
-                                              or norm_role(cell(rows[i], "Role")) in nr)]
+        by_role = [h for h in hits if norm_role(cell(h, "Role")) == nr] or \
+                  [h for h in hits if nr and (nr in norm_role(cell(h, "Role"))
+                                              or norm_role(cell(h, "Role")) in nr)]
         if len(by_role) == 1:
             return by_role[0], ""
-    applied = [i for i in hits if cell(rows[i], "Applied on")]
+    if len(hits) == 1:
+        return hits[0], ""
+    applied = [h for h in hits if cell(h, "Applied on")]
     if len(applied) == 1:
         return applied[0], ""
     return None, f"ambiguous: {len(hits)} rows for {company}"
 
 
-def plan(rows, col, d: dict) -> tuple[int | None, dict[str, str], list[str], str]:
-    """-> (row index, {column name: new value}, human-readable changes, note)."""
-    idx, why = pick_row(rows, col, d["company"], d.get("role") or "")
-    if idx is None:
-        return None, {}, [], why
+def plan(rows, col, idx: int, d: dict) -> tuple[dict[str, str], list[str], str]:
+    """-> ({column name: new value}, human-readable changes, note)."""
     r = rows[idx]
 
     def cur(name):
@@ -193,13 +242,15 @@ def plan(rows, col, d: dict) -> tuple[int | None, dict[str, str], list[str], str
         writes["First reply on"] = when
 
     changes = [f"{a1(col[k])} {k}: {cur(k)!r} -> {v!r}" for k, v in writes.items()]
-    return idx, writes, changes, note
+    return writes, changes, note
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--no-push", action="store_true",
+                    help="no Telegram push — for a backfill of old mail, whose interviews are past")
     ap.add_argument("--decisions", type=Path, default=DECISIONS)
     ap.add_argument("--mail", type=Path, default=MAIL)
     args = ap.parse_args()
@@ -230,50 +281,37 @@ def main() -> int:
     sid = jobprofile.spreadsheet_id()
     svc = build("sheets", "v4", credentials=creds(), cache_discovery=False).spreadsheets()
 
-    # One tracker tab per track (e.g. a second track's bi_applications). A reply is applied
-    # to whichever tab holds the company, the default track's tab first. Each tab's columns
-    # come from its own header. A missing tab (before setup_sheets.py has run) is skipped.
     need = ["Company", "Role", "Applied on", "Status", "First reply on", "Stage reached"]
-    tabs_data: dict[str, tuple[dict, list]] = {}
-    for tab in TRACKER_TABS:
-        try:
-            header = (svc.values().get(spreadsheetId=sid, range=f"{tab}!1:1")
-                      .execute().get("values", [[]]) or [[]])[0]
-        except Exception:
-            if tab == TRACKER_TABS[0]:
-                raise
-            continue
-        tcol = {name: i for i, name in enumerate(header)}
-        missing = [n for n in need if n not in tcol]
-        if missing:
-            sys.exit(f"{tab} tab has no {missing} column — run setup_sheets.py first.")
-        last = a1(max(tcol[n] for n in need))
-        trows = (svc.values().get(spreadsheetId=sid, range=f"{tab}!A2:{last}")
-                 .execute().get("values", []))
-        tabs_data[tab] = (tcol, trows)
+    header = (svc.values().get(spreadsheetId=sid, range=f"{TAB}!1:1")
+              .execute().get("values", [[]]) or [[]])[0]
+    col = {name: i for i, name in enumerate(header)}
+    missing = [n for n in need if n not in col]
+    if missing:
+        sys.exit(f"{TAB} tab has no {missing} column — run setup_sheets.py first.")
+    last = a1(max(col[n] for n in need))
+    rows = (svc.values().get(spreadsheetId=sid, range=f"{TAB}!A2:{last}")
+            .execute().get("values", []))
 
-    updates: dict[tuple[str, int, str], str] = {}
-    log_rows = []
+    updates: dict[tuple[int, str], str] = {}
+    events = 0
+    pushes: list[tuple[dict, dict, str]] = []
     today = date.today().isoformat()
     for d in todo:
         m = mail[d["id"]]
+        if d["event"] in PUSH_EVENTS and not d.get("company"):
+            pushes.append((d, m, ""))
         if d["event"] == "none" or not d.get("company"):
             if d["event"] != "none":
-                log_rows.append([today, d["date"], "", "", d["event"], m["from"], m["subject"],
-                                 "no company identified", d.get("evidence", "")])
+                events += 1
+                print(f"  ? {d['date']} {d['event']} from {m['from']} ({m['subject']}): "
+                      f"no company identified", file=sys.stderr)
             continue
-        for tab, (col, rows) in tabs_data.items():
-            idx, writes, changes, note = plan(rows, col, d)
-            if idx is not None:
-                break
-        else:
-            col, rows = tabs_data[TRACKER_TABS[0]]
-            tab = TRACKER_TABS[0]
-            idx, writes, changes, note = plan(rows, col, d)
+        idx, note = pick_row(col, rows, d["company"], d.get("role") or "")
         if idx is not None:
+            writes, changes, note = plan(rows, col, idx, d)
             for k, v in writes.items():
                 assert k not in FORBIDDEN, k
-                updates[(tab, idx, k)] = v
+                updates[(idx, k)] = v
                 # later emails in this run see the state earlier ones produced
                 r = rows[idx]
                 r.extend([""] * (col[k] + 1 - len(r)))
@@ -282,42 +320,39 @@ def main() -> int:
             change = "; ".join(changes + ([note] if note else [])) or "no change (already there)"
         else:
             role, change = d.get("role") or "", note
-        log_rows.append([today, d["date"], d["company"], role, d["event"], m["from"],
-                         m["subject"], change, d.get("evidence", "")[:300]])
+        if d["event"] in PUSH_EVENTS:
+            pushes.append((d, m, role))
+        events += 1
         print(f"  {'~' if idx is not None else '?'} {d['date']} {d['company']} — {d['event']}: "
               f"{change}", file=sys.stderr)
 
     if args.dry_run:
-        print(f"--dry-run: {len(updates)} cell(s), {len(log_rows)} log row(s) not written.",
-              file=sys.stderr)
+        print(f"--dry-run: {len(updates)} cell(s) not written, "
+              f"{len(pushes)} Telegram push(es) not sent.", file=sys.stderr)
         return 0
 
     if updates:
         svc.values().batchUpdate(spreadsheetId=sid, body={
             "valueInputOption": "USER_ENTERED",
-            "data": [{"range": f"{t}!{a1(tabs_data[t][0][k])}{i + 2}", "values": [[v]]}
-                     for (t, i, k), v in updates.items()]}).execute()
-
-    if log_rows:
-        tabs = {s["properties"]["title"] for s in
-                svc.get(spreadsheetId=sid, fields="sheets.properties.title").execute()["sheets"]}
-        if LOG_TAB not in tabs:
-            svc.batchUpdate(spreadsheetId=sid, body={"requests": [
-                {"addSheet": {"properties": {"title": LOG_TAB}}}]}).execute()
-            svc.values().update(spreadsheetId=sid, range=f"{LOG_TAB}!A1",
-                                valueInputOption="RAW", body={"values": [LOG_HEADER]}).execute()
-        # Same lesson as the tracker: the end of the table comes from the whole block.
-        have = svc.values().get(spreadsheetId=sid, range=f"{LOG_TAB}!A1:I"
-                                ).execute().get("values", [])
-        start = len(have) + 1
-        svc.values().update(spreadsheetId=sid, range=f"{LOG_TAB}!A{start}",
-                            valueInputOption="RAW", body={"values": log_rows}).execute()
+            "data": [{"range": f"{TAB}!{a1(col[k])}{i + 2}", "values": [[v]]}
+                     for (i, k), v in updates.items()]}).execute()
 
     for d in todo:
         seen[d["id"]] = {"event": d["event"], "company": d.get("company"), "at": today}
     SEEN.write_text(json.dumps(seen, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(f"Applied {len(updates)} cell(s) to the tracker, {len(log_rows)} row(s) to "
-          f"{LOG_TAB}; {len(todo)} message(s) marked handled.", file=sys.stderr)
+    print(f"Applied {len(updates)} cell(s) to the tracker from {events} event(s); "
+          f"{len(todo)} message(s) marked handled.", file=sys.stderr)
+
+    # Last: the sheet and mail_seen are written, so a failed push is lost, never duplicated.
+    if pushes and args.no_push:
+        print(f"--no-push: {len(pushes)} interview/offer push(es) not sent.", file=sys.stderr)
+    elif pushes:
+        sent = push(pushes)
+        for mid in sent:
+            seen[mid]["pushed"] = True
+        SEEN.write_text(json.dumps(seen, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        print(f"Telegram: {len(sent)} of {len(pushes)} interview/offer push(es) sent.",
+              file=sys.stderr)
     return 0
 
 

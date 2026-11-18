@@ -122,7 +122,7 @@ Replace with what was done: *built, cut, moved, replaced, wrote, ran, hired, fix
    generated? Fix that, re-run the linter, aim for zero hard hits.
 7. **Output.** Before / after per section, the open questions, and the linter result.
    For `master_cv.yaml`, edit in place and keep the comments; re-render with
-   `uv run scripts/render_cv.py --generic` and `ats_lint.py` so the one-page and keyword rules
+   `uv run scripts/render_cv.py --generic` and `ats_lint.py` so the page-limit and keyword rules
    still pass. For LinkedIn, write `profile/cv/LinkedIn_profile.txt` (inside the gitignored
    profile) — plain text, one `=====` block per LinkedIn field, since LinkedIn renders no
    Markdown. Check field limits (headline 220, About 2,600, each description 2,000). The

@@ -45,7 +45,7 @@ logs call "needs attention".
   `prompts/`, `CLAUDE.md`, `templates/`, `rules/`, `.claude/`, or anything under
   `vacancies/`. A fix that needs one of those goes into the report as a proposal.
 - Never relax a gate, a geography or language rule, a title family, an exclusion, the
-  one-page CV check or the ATS lint. Never add a retry loop around a 403/429 — a throttle is
+  CV page-limit check or the ATS lint. Never add a retry loop around a 403/429 — a throttle is
   answered by waiting, not by hammering.
 - Before editing, copy the file to `state/review_backups/<today>/<name>` (`cp`).
 - Smallest change that fixes the cause, in the file's own style, with a dated comment saying

@@ -72,6 +72,10 @@ def master_cv_path() -> Path:
     return path("cv", "master_cv.yaml")
 
 
+def excluded_companies_path() -> Path:
+    return path("excluded_companies.yaml")
+
+
 def template_path() -> Path:
     own = path("cv", "template.html")
     return own if own.exists() else DEFAULT_TEMPLATE
@@ -117,9 +121,40 @@ def load_master_cv() -> dict:
     return _read(master_cv_path())
 
 
+LEGAL_SUFFIXES = {"inc", "inc.", "llc", "ltd", "ltd.", "limited", "gmbh", "s.l.", "sl",
+                  "b.v.", "bv", "s.a.", "sa", "ag", "oy", "ab", "plc"}
+
+
+def norm_company(name: str) -> str:
+    """"Acme" = "Acme Inc." = "acme, ltd" — the tracker's one-row-per-company key."""
+    parts = re.sub(r"\s+", " ", (name or "").strip().lower()).split()
+    if len(parts) > 1 and parts[-1].strip(",") in LEGAL_SUFFIXES:
+        parts = parts[:-1]
+    return " ".join(parts).rstrip(",")
+
+
+def excluded_companies() -> dict[str, str]:
+    """{normalised name: reason} from profile/excluded_companies.yaml: companies whose new
+    postings get no folder (candidate, 2026-11-16). Every company that rejected the candidate
+    is added by scripts/rejected_companies.py; the candidate adds others by hand."""
+    out = {}
+    for c in _read(excluded_companies_path()).get("companies") or []:
+        name = c.get("name") if isinstance(c, dict) else c
+        if name:
+            out[norm_company(str(name))] = (c.get("reason") if isinstance(c, dict) else "") or ""
+    return out
+
+
 def spreadsheet_id() -> str:
     return ((load_sources().get("destinations") or {}).get("google_sheets") or {}) \
         .get("spreadsheet_id") or ""
+
+
+def tracker_tab() -> str:
+    """The tracker's one tab (since 2026-11-18): every track's rows, every mail reply, every
+    reaction and /apply mark land here. No funnel, stats or log tabs."""
+    return ((load_sources().get("destinations") or {}).get("google_sheets") or {}) \
+        .get("tab") or "applications"
 
 
 def cv_filename(cv: dict | None = None) -> str:
@@ -195,19 +230,17 @@ def timezone() -> str:
     return str(load_search_profile().get("timezone") or "UTC")
 
 
-DEFAULT_TRACK = {"name": "main", "families": [], "tab": "applications",
-                 "stats_tab": "daily_stats", "seen_file": "state/seen.json",
+DEFAULT_TRACK = {"name": "main", "families": [], "seen_file": "state/seen.json",
                  "log_suffix": "", "sources": []}
 
 
 def tracks() -> list[dict]:
     """The search tracks, from search_profile.yaml `tracks`. Each track is processed by its
-    own agent and writes its own tracker tab. The first track is the default: it owns every
-    role family not claimed by another track, and it alone reads mail.
+    own agent; all of them write the one tracker tab (tracker_tab()). The first track is the
+    default: it owns every role family not claimed by another track, and it alone reads mail.
 
       name        main / bi / ...           (used in --track and file names)
       families    role families this track owns (empty on the default track = the rest)
-      tab         tracker tab               stats_tab  its daily_stats tab
       seen_file   its dedup file            log_suffix logs/DATE<suffix>.md
       sources     extra source files only this track reads (e.g. linkedin_bi)
 
@@ -218,8 +251,7 @@ def tracks() -> list[dict]:
     out = []
     for i, t in enumerate(raw):
         name = t["name"]
-        d = {**DEFAULT_TRACK, "tab": f"{name}_applications", "stats_tab": f"{name}_daily_stats",
-             "seen_file": f"state/seen_{name}.json", "log_suffix": f".{name}"}
+        d = {**DEFAULT_TRACK, "seen_file": f"state/seen_{name}.json", "log_suffix": f".{name}"}
         if i == 0:
             d = dict(DEFAULT_TRACK)
         d.update(t)

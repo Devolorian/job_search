@@ -1,0 +1,12 @@
+# Companies whose new postings are not taken: no folder, no CV, no tracker row. triage.py drops
+# them before the model reads them; names match the tracker's way ("Acme" = "Acme Inc.").
+#
+# scripts/rejected_companies.py adds every company with a rejection in the tracker (Status
+# Rejected, or Stage reached declined) at the start of each run. Add others by hand with any
+# reason. To take a company off, delete its entry and put its name under `released`, or the
+# next run adds it back from the tracker.
+
+companies:
+- name: Globex
+  reason: rejected 2026-01-15 (Analytics Engineer)
+released: []

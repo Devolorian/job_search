@@ -47,6 +47,7 @@ import re
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -139,6 +140,10 @@ def get(path: str, state: dict) -> str:
     if state["used"] >= state["limit"]:
         raise Stop(f"request budget ({state['limit']}) exhausted")
     state["used"] += 1
+    # The sitemap gives slugs as raw UTF-8 (an emoji, Cyrillic); http.client sends ASCII only,
+    # so such a detail page raised UnicodeEncodeError on every run (2026-11-13, -14). Percent-
+    # encode what is not ASCII; "%" stays safe so an already-encoded slug is not encoded twice.
+    path = urllib.parse.quote(path, safe="/%:?=&")
     req = urllib.request.Request(f"{BASE}/{path.lstrip('/')}", headers=UA)
     try:
         data = urllib.request.urlopen(req, timeout=30).read()
@@ -288,10 +293,14 @@ def load_config() -> dict:
 
 
 def load_seen() -> set[str]:
-    """Keys of both tracks: seen.json (main) and seen_bi.json (BI). A key either track has
-    handled costs no detail request."""
+    """Keys of every track's seen file (jobprofile.tracks()). A key any track has handled
+    costs no detail request."""
+    # Until 2026-11-16 this read seen.json and seen_bi.json only, so the data_engineer and
+    # part_time keys were never "seen" here (the same bug fixed in collect_linkedin.py 2026-11-15).
     keys: set[str] = set()
-    for path in (SEEN, SEEN.with_name("seen_bi.json")):
+    paths = {SEEN, SEEN.with_name("seen_bi.json")}
+    paths |= {ROOT / t["seen_file"] for t in jobprofile.tracks()}
+    for path in paths:
         try:
             keys |= set((json.loads(path.read_text(encoding="utf-8")) or {}).get("entries", {}))
         except Exception:

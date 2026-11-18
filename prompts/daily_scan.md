@@ -29,7 +29,8 @@ Arguments you may be given: `--dry-run` (do everything locally, write nothing to
 
 Tracks are defined in `profile/search_profile.yaml` `tracks` (`uv run --with pyyaml python
 scripts/jobprofile.py tracks` lists them). With none defined there is one track, `main`. Each
-track is processed by its own agent, with its own tracker tab, stats tab, seen file and log. One
+track is processed by its own agent, with its own seen file and log; every track writes the
+one tracker tab (`destinations.google_sheets.tab`, default `applications`). One
 posting belongs to exactly one track, decided by the family its title resolves to: a family
 listed under a non-default track's `families` is that track's; everything else is the default
 (first) track's. When a title matches two families, the stronger (higher `weight`) wins.
@@ -39,10 +40,9 @@ listed under a non-default track's `families` is that track's; everything else i
 | Records processed | every family not claimed by another track | its `families` only |
 | Extra sources | — | its `sources` (e.g. `state/linkedin_bi.jsonl`) — read by it alone |
 | Dedup reads / writes | its `seen_file` (`state/seen.json`) | reads the default seen file **and** its own, writes only its own |
-| Mail (5a) | yes | **no** — the default track's mail stage covers every tab |
-| Tracker (5b) | `--track <name>` → its `tab` | `--track <name>` → its `tab` |
-| Stats (5c) | its `stats_tab` | its `stats_tab` |
-| Log (5d) | `logs/YYYY-MM-DD<log_suffix>.md` | same |
+| Mail (5a) | yes | **no** — the default track's mail stage covers the whole tracker |
+| Tracker (5b) | `--track <name>` → the one tab | `--track <name>` → the one tab |
+| Log (5c) | `logs/YYYY-MM-DD<log_suffix>.md` | same |
 | `state/last_run.json`, Telegram cursors | never written by the agent in a scheduled run | never written, ever |
 
 A record of another track is skipped silently — not dropped, not written to your seen file, not
@@ -59,7 +59,7 @@ track takes, which tools it requires) are in the profile's rules.
   committed by `daily_run.sh` after every track finishes — not by you.
 - **Interactive** (`/job-scan`, no `RUN CONTEXT`) — run Stage 1 yourself, then do each track in
   turn in the same session; with `--track` given, only that one. Commit the Telegram cursors
-  (Stage 5d) only when **every** track was processed in this session — a one-track run that
+  (Stage 5c) only when **every** track was processed in this session — a one-track run that
   advanced them would lose the other tracks' posts in that window.
 
 ---
@@ -224,7 +224,7 @@ the new cursor, but **only after the run completes**.
 uv run scripts/collect_telegram.py --json state/telegram.jsonl \
     --cursors-out state/telegram_cursors.pending.json
 ```
-The cursors of **this read** are saved, not committed; Stage 5d commits them with
+The cursors of **this read** are saved, not committed; Stage 5c commits them with
 `--commit-from`. Never commit with a second read (`--commit-cursors`): it advances past messages
 that arrived between the two reads, which nobody has looked at.
 
@@ -288,6 +288,15 @@ What to do with the file:
 
 Its **first run looks back two weeks**, not the usual window — see CLAUDE.md. Expect the first run
 of a new source to be large and the second to be almost empty; both are normal.
+
+### Excluded companies
+Interactive runs only (the scheduled run does it in `daily_run.sh`), after the collectors:
+```bash
+uv run scripts/rejected_companies.py   # adds companies with a rejection to profile/excluded_companies.yaml
+```
+`triage.py new` drops every posting from a company on that list before you see it and names
+them in one `# excluded companies` line: copy that line into the run log. Never make a folder
+for such a company by another route (a Telegram post naming it, a `--company` override).
 
 ## Stage 2 — Normalize and deduplicate
 
@@ -419,7 +428,7 @@ Selection rules: lead with the bullet closest to the posting's core responsibili
 recent role fullest; drop bullets that carry no signal for this posting rather than padding. Use
 the posting's exact tool names — but only for tools the bank already evidences.
 
-**Skills and bullets stay coupled.** The CV is one page, so most of the bank is left out of any
+**Skills and bullets stay coupled.** The CV is at most two pages, so much of the bank is left out of any
 given render — which means a skill can end up in `Technical Skills` with nothing on the page
 backing it. That is the weak-signal case ATS rule 19 exists to prevent. So: if a tool is in the
 rendered skills line *because the posting asked for it*, the bullet that names that tool must be
@@ -499,8 +508,8 @@ run log.
 
 ### 5a. Mail — replies to applications  (before the tracker, always — default track only)
 
-**Other tracks skip 5a.** One mail pass covers every tab: `sheets_apply_mail.py` applies a reply
-to whichever tracker tab holds the company. Read the mail first, so the tracker reflects what
+**Other tracks skip 5a.** One mail pass covers the whole tracker: `sheets_apply_mail.py` applies a
+reply to the company's row, whichever track added it. Read the mail first, so the tracker reflects what
 employers have answered before anything new is added to it.
 
 ```bash
@@ -531,7 +540,7 @@ handled and not re-read:
   question, a scheduling delay, "we are still reviewing").
 - `none` — job alerts, newsletters, marketing, "X viewed your profile", anything not a reply to an
   application, and everything unrelated to work.
-- `company` must name a tracker row. Read every track's tab (Company, Role) and match the employer
+- `company` must name a tracker row. Read the tracker tab (Company, Role) and match the employer
   to it; an ATS sender like `no-reply@ashbyhq.com` names the employer in the display name, the
   subject or the body. A reply from a company **not** in the tracker still gets its real event,
   with `company` set to the employer's name as the email gives it — the script logs it as "no
@@ -550,9 +559,15 @@ it. Summary: a confirmation writes the email date into **`Applied on` (B), only 
 and `Applied` into `Stage reached`; later events move `Stage reached` forward only (Applied <
 Assessment < Interview < Offer; a rejection writes `declined` unless an interview was already
 reached), set `Status`, and set `First reply on` if it is empty. Hand-written notes in `Stage
-reached` and hand-set statuses such as `skipped` are never overwritten. Every change is recorded
-in the `mail_log` tab. In the run log and the Stage 6 report, list each change: company, event,
+reached` and hand-set statuses such as `skipped` are never overwritten. The script prints every
+change (the tracker has no log tab). In the run log and the Stage 6 report, list each change: company, event,
 email date — interviews and offers first, they need the candidate today.
+
+**Every `interview` and `offer` decision is pushed to the candidate's Telegram** (their private
+chat with the bot) by the same script, once per email, after the sheet write — so classify an
+invitation to any call as `interview` even when the company has no tracker row; never downgrade
+one to `recruiter_reply`. A push that was not sent is printed as `! ... not sent`: log it under
+failures and put that interview at the top of the Stage 6 report.
 
 ### 5b. The application tracker
 ```bash
@@ -560,12 +575,12 @@ uv run scripts/sheets_add_applications.py --track <your track>
 ```
 Run it with your own track only. It routes folders by the family in `source.json`, so write
 `role_family` there exactly (the family key, e.g. `analytics_engineer`), never a display label.
-Adds one `Prepared` row to the track's tab for **every vacancy folder that has a rendered CV** —
+Adds one `Prepared` row to the tracker tab for **every vacancy folder that has a rendered CV** —
 date added, link, match score, ATS coverage, CV filename, folder path. Idempotent: it matches on
 the **folder path** it writes into Notes and skips what is already tracked (every CV has the same
 file name, so the CV name cannot tell two folders apart).
 
-**One row per company, ever.** If any vacancy from a company is already in the tracker — any tab —
+**One row per company, ever.** If any vacancy from a company is already in the tracker,
 a second one is not written. The script enforces this itself, on a normalised company name, so
 "Acme" and "Acme Inc." count as the same employer. Do not work around it by adding the row by hand
 — applying to a second role at the same company is a call the candidate makes. The folder and the
@@ -574,22 +589,15 @@ skipped and why.
 
 Three rules that are not negotiable:
 
-- **Never write column B (`Applied on`) when adding a row.** That column is what the funnel counts
-  as an application actually sent. The pipeline prepares; the candidate sends. A date written
+- **Never write column B (`Applied on`) when adding a row.** That column is what counts as an
+  application actually sent. The pipeline prepares; the candidate sends. A date written
   there without evidence is a lie about what happened. The one exception is 5a: an employer's own
   confirmation email is that evidence, and only `sheets_apply_mail.py` writes it.
 - **Write columns A:M only.** Column N is an ARRAYFORMULA computing days-to-reply. An A:N write
   replaces it with a literal and every reply metric silently stops working.
 - **Resolve columns by header name, never by letter.** The script reads row 1 first.
 
-### 5c. The daily statistics
-Append one row to your track's `stats_tab` (columns A:H). Columns: date, scanned, new, matched,
-folders created, errors, one-line note, mail events — the number of log rows
-`sheets_apply_mail.py` reported in 5a (0 on tracks that skip mail, or when the mail stage was
-skipped — say why in the note). Dates as `YYYY-MM-DD`; the sheet's locale is pinned to `en_US` so
-the formulas stay portable.
-
-### 5d. The log and the state
+### 5c. The log and the state
 - **Open the log with `## Send today`**: at most three of this run's new folders worth applying to
   today, best first, one line each: company, title, geo, why, folder path. Order by the profile's
   rules; with none, by how fresh the posting is (the first applicants get read) and how well the
@@ -611,4 +619,4 @@ the formulas stay portable.
 Finish with a short summary to stdout, in the candidate's language (`profile/CANDIDATE.md`): how
 many were scanned, how many were new, which ones got folders (title, company, score, one line
 each), and anything that needs the candidate's attention. Lead with what is worth acting on today
-— the `## Send today` list from 5d — not with the counts.
+— the `## Send today` list from 5c — not with the counts.

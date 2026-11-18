@@ -41,14 +41,14 @@ reworded for clarity, or one whose figure you are not sure you read correctly, g
      role (the company's name, e.g. `acme`). Bullets: one achievement each, past tense, verb
      first, the figures exactly as written. LinkedIn often carries roles or detail the CV
      dropped: take them, marked `needs_confirmation: true`. The bank is a superset — keep every
-     bullet, the one-page CV is a selection from it.
+     bullet, the CV (at most two pages) is a selection from it.
    - `skills` — grouped, every skill with `evidenced_by:` naming the role ids where the
      documents show it used. A skill no role evidences does not go in.
    - `summaries` — one per kind of role the candidate targets (keys are free; the scan rules
      map role families to them), 2-3 sentences each, built only from the bank.
    - `default_selection`, `education`, `certifications`, `languages`.
    Then render and lint it: `uv run scripts/render_cv.py --generic --allow-todo` and
-   `uv run scripts/ats_lint.py profile/cv/CV_*.pdf`. Fix the selection until it is one page.
+   `uv run scripts/ats_lint.py profile/cv/CV_*.pdf`. Fix the selection until it fits two pages.
 
 3. **Ask, briefly, what the documents cannot say** — one message, grouped, with your proposed
    answer for each so the candidate can just confirm:

@@ -90,8 +90,8 @@ def load_tailor(job_dir: Path | None, cv: dict) -> dict:
     """The selection to render.
 
     Per-vacancy: the vacancy folder's tailor.yaml. Otherwise master_cv.yaml's
-    `default_selection`. There is no "render everything" mode — the CV is always exactly
-    one page (CLAUDE.md rule 5), so a selection is always required.
+    `default_selection`. There is no "render everything" mode — the CV is always at most
+    two pages (CLAUDE.md rule 5), so a selection is always required.
     """
     if job_dir is not None:
         p = job_dir / "tailor.yaml"
@@ -123,7 +123,9 @@ def select_bullets(role: dict, tailor: dict) -> list[dict]:
     live = [
         (bullet_id(rid, i), b)
         for i, b in enumerate(role.get("bullets") or [])
-        if not b.get("placeholder")
+        # retired: a slot kept only so the ids after it keep their numbers (a bullet whose
+        # text was lost when the bank was rebuilt); never rendered, never a gap.
+        if not b.get("placeholder") and not b.get("retired")
     ]
     if rid in bullets_cfg and not bullets_cfg[rid]:
         return []
@@ -179,7 +181,7 @@ def build_html(cv: dict, tailor: dict) -> str:
         parts.append(f'<p class="headline">{esc(headline)}</p>')
 
     # Rule 23: each field plain text, LinkedIn spelled out, all in the body. Two lines, not
-    # four: on a one-page CV (CLAUDE.md rule 5) every header line costs a bullet.
+    # four: on a CV of at most two pages (CLAUDE.md rule 5) every header line costs a bullet.
     line1 = " | ".join(x for x in [c.get("phone"), c.get("email"), c.get("location"),
                                    c.get("work_authorization")] if x)
     parts.append(f'<p class="contact">{esc(line1)}</p>')

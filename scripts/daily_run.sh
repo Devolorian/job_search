@@ -1,5 +1,6 @@
 #!/bin/bash
-# Scheduled entrypoint for the daily vacancy scan (launchd: scripts/install_schedule.sh).
+# Entrypoint for the vacancy scan: by hand on a machine that is not always on (how this one
+# runs since 2026-11-13), or on a timer via launchd (scripts/install_schedule.sh).
 #
 # Runs `claude -p` headlessly in the project directory. Tools are allow-listed explicitly
 # rather than bypassing permissions: in headless mode anything outside the list is denied
@@ -87,6 +88,25 @@ DEFAULT_TRACK="${TRACKS[0]}"
 # collector is recorded, never fatal. A source with `enabled: false` is skipped.
 # ---------------------------------------------------------------------------------------------
 STATUS="$PROJECT/state/collect_run.json"
+# The window reaches back to the previous collection, not a fixed lookback_hours. This machine
+# is switched on now and then and the scan is started by hand, never on a timer (candidate,
+# 2026-11-13): after three days off, the fixed 30h window lost two days of postings. The gap
+# is measured from the previous run's start, plus 6h of overlap (dedup absorbs the repeats);
+# under 30h the configured window applies unchanged, and it is capped at the two-week first-run
+# lookback. A wide gap also raises LinkedIn's request budget, or the window is half a window.
+# Telegram is left alone: its per-chat cursors already cover any gap.
+WIN=(); LI_BUDGET=()
+if [ -f "$STATUS" ]; then
+  GAP_H="$(python3 -c 'import json,sys,math,datetime as d
+s=json.load(open(sys.argv[1])).get("started_utc")
+t=d.datetime.strptime(s,"%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=d.timezone.utc) if s else None
+print(min(336, math.ceil((d.datetime.now(d.timezone.utc)-t).total_seconds()/3600)+6) if t else "")' "$STATUS" 2>/dev/null)"
+  if [ -n "$GAP_H" ] && [ "$GAP_H" -gt 30 ]; then
+    WIN=(--hours "$GAP_H")
+    [ "$GAP_H" -gt 72 ] && LI_BUDGET=(--max-requests "$(jp get sources.linkedin.first_run_max_requests)")
+    echo "  window: ${GAP_H}h, back to the previous collection" >> "$LOG"
+  fi
+fi
 STARTED="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 ENTRIES=""
 collect() {
@@ -106,18 +126,18 @@ if enabled board_discovery && uv run scripts/discover_boards.py --due >> "$LOG" 
     --allowedTools 'WebSearch,Read,Edit(state/_discovery_hits.json),Bash(uv run scripts/discover_boards.py:*)'
 fi
 enabled company_boards && collect boards uv run scripts/collect_boards.py --feeds --json state/collected.jsonl
-enabled linkedin    && collect linkedin    uv run scripts/collect_linkedin.py --json state/linkedin.jsonl
+enabled linkedin    && collect linkedin    uv run scripts/collect_linkedin.py "${WIN[@]+"${WIN[@]}"}" "${LI_BUDGET[@]+"${LI_BUDGET[@]}"}" --json state/linkedin.jsonl
 # Further LinkedIn searches (a track's own `sources`) are kept apart from the first on purpose:
 # back to back, the second started on an IP the first had just exhausted, and got a 429 on its
 # first request. They run last.
-enabled wellfound   && collect wellfound   uv run scripts/collect_wellfound.py --json state/wellfound.jsonl
-enabled builtin     && collect builtin     uv run scripts/collect_builtin.py --json state/builtin.jsonl
+enabled wellfound   && collect wellfound   uv run scripts/collect_wellfound.py "${WIN[@]+"${WIN[@]}"}" --json state/wellfound.jsonl
+enabled builtin     && collect builtin     uv run scripts/collect_builtin.py "${WIN[@]+"${WIN[@]}"}" --json state/builtin.jsonl
 if enabled euremotejobs; then
-  collect euremotejobs uv run scripts/collect_euremotejobs.py --json state/euremotejobs.jsonl
+  collect euremotejobs uv run scripts/collect_euremotejobs.py "${WIN[@]+"${WIN[@]}"}" --json state/euremotejobs.jsonl
   # Its records name each employer's own ATS: those boards are polled from the next run on.
   collect euremote_boards uv run scripts/discover_boards.py --from state/euremotejobs.jsonl
 fi
-enabled himalayas   && collect himalayas   uv run scripts/collect_himalayas.py --json state/himalayas.jsonl
+enabled himalayas   && collect himalayas   uv run scripts/collect_himalayas.py "${WIN[@]+"${WIN[@]}"}" --json state/himalayas.jsonl
 TELEGRAM=0
 if enabled telegram; then
   TELEGRAM=1
@@ -126,11 +146,16 @@ if enabled telegram; then
 fi
 for t in "${TRACKS[@]}"; do
   for src in $(jp track "$t" sources); do
-    enabled "$src" && collect "$src" uv run scripts/collect_linkedin.py --profile "$src" --json "state/$src.jsonl"
+    enabled "$src" && collect "$src" uv run scripts/collect_linkedin.py --profile "$src" "${WIN[@]+"${WIN[@]}"}" "${LI_BUDGET[@]+"${LI_BUDGET[@]}"}" --json "state/$src.jsonl"
   done
 done
 printf '{"started_utc": "%s", "finished_utc": "%s", "collectors": {%s}}\n' \
   "$STARTED" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$ENTRIES" > "$STATUS"
+
+# Companies that rejected the candidate go onto profile/excluded_companies.yaml before the tracks
+# start, so triage.py never lists their new postings (candidate, 2026-11-16). Never fatal: the
+# list as it stands is used.
+uv run scripts/rejected_companies.py >> "$LOG" 2>&1 || echo "  rejected_companies failed: exit $?" >> "$LOG"
 
 # ---------------------------------------------------------------------------------------------
 # Phase 2 — the tracks, in parallel. Each gets the same prompt with a RUN CONTEXT header naming

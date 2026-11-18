@@ -108,12 +108,11 @@ Google Docs PDF export artifact. Rule 25 is the regression test against it.
 
 ## Length
 
-24. **[lint]** **Exactly one page** — the one-page rule (CLAUDE.md rule 5), overriding the
-    research default. The evidence says ATS does not truncate by page count and that 1.5–2
-    pages is the norm for a senior IC — so this trades some content for a recruiter-facing
-    format that is quick to read. The cost is real and is paid deliberately: it means every
-    render is a *selection* from the bullet bank, and the selection has to be good. A
-    two-page render is a lint failure, not a warning.
+24. **[lint]** **At most two pages** (CLAUDE.md rule 5). The evidence says ATS does not
+    truncate by page count and that 1.5–2 pages is the norm for a senior IC; the candidate
+    moved the limit from one page to two on 2026-11-05. Every render is still a *selection*
+    from the bullet bank, and the selection has to be good. A three-page render is a lint
+    failure, not a warning.
 
 ## Extraction integrity
 
@@ -122,6 +121,22 @@ Google Docs PDF export artifact. Rule 25 is the regression test against it.
     text immediately follows its marker, sections appear in template order, and no run of
     orphaned bullet glyphs exists. This is the rule a Google Docs export violates, and the
     single highest-value check in this file.
+
+26. **[lint]** **Every parser reads the same words** (2026-11-16). No ATS uses PDFKit, so the
+    text is also extracted with pdfminer.six, pypdf, PyMuPDF (MuPDF), pypdfium2 (PDFium) and
+    pdfplumber (and poppler's pdftotext when installed), and every text check above runs on
+    each. A word PDFKit reads that another parser loses is a keyword an ATS on that parser
+    cannot match: over 2% of the words missing fails the CV, over 0.5% warns. Any text check
+    that fails on any one parser fails the CV.
+
+27. **[lint]** **Every parser finds every job** (2026-11-16): in each extraction the WORK
+    EXPERIENCE section holds every employer, title and date range that PDFKit's does. This is
+    the structured parse an ATS fills its form from; a two-column layout passes PDFKit and
+    fails here (pdfminer and pdfplumber read the columns out of order).
+
+Ready-made "ATS simulator" packages were looked at and left out: unmaintained (pyresparser) or
+of unverifiable origin, and some send the CV to an LLM provider. Apache Tika (PDFBox) would be
+a seventh engine but needs a Java runtime, which this machine does not have.
 
 ## What is deliberately NOT done
 

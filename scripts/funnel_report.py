@@ -18,7 +18,7 @@ Each tracker row is joined to its vacancy folder through the folder path in Note
 sheet does not carry. Rows added by hand have no folder and are reported under "(no folder)".
 
 Usage:
-    uv run scripts/funnel_report.py                    # markdown report, both tabs
+    uv run scripts/funnel_report.py                    # markdown report
     uv run scripts/funnel_report.py --followups 10     # applied 10+ days ago, no reply yet
     uv run scripts/funnel_report.py --json out.json    # rows with outcomes, for the model
 """
@@ -42,7 +42,7 @@ ROOT = Path(__file__).resolve().parent.parent
 CONFIG = jobprofile.SHARED_SOURCES
 ENV_FILE = Path.home() / ".job_search" / "sheets.env"
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets.readonly"]
-TABS = {t["name"]: t["tab"] for t in jobprofile.tracks()}
+TAB = jobprofile.tracker_tab()
 
 
 def creds():
@@ -83,6 +83,9 @@ def outcome(r: dict) -> dict:
         "interview": stage in ("interview", "offer") or status in ("interview", "offer"),
         "rejected": stage == "declined" or status in ("rejected", "declined"),
         "skipped": status == "skipped",
+        # Since 2026-11-16: the posting was gone before an application went out — the
+        # employer's doing, not the candidate's drop ("skipped").
+        "closed": status == "closed",
     }
 
 
@@ -102,19 +105,21 @@ def read_rows() -> list[dict]:
     sid = jobprofile.spreadsheet_id()
     svc = build("sheets", "v4", credentials=creds(), cache_discovery=False).spreadsheets()
     rows = []
-    for track, tab in TABS.items():
-        # Columns by header name, never by letter (CLAUDE.md).
-        header = (svc.values().get(spreadsheetId=sid, range=f"{tab}!1:1")
-                  .execute().get("values", [[]]) or [[]])[0]
-        for i, raw in enumerate(svc.values().get(spreadsheetId=sid, range=f"{tab}!A2:N")
-                                .execute().get("values", []), start=2):
-            r = {h: (raw[j].strip() if j < len(raw) else "") for j, h in enumerate(header)}
-            if not r.get("Company") and not r.get("Role"):
-                continue
-            r.update(track=track, tab=tab, row=i, **folder_facts(r.get("Notes", "")))
-            r["band"] = score_band(r.get("Match score", ""))
-            r["outcome"] = outcome(r)
-            rows.append(r)
+    # Columns by header name, never by letter (CLAUDE.md).
+    header = (svc.values().get(spreadsheetId=sid, range=f"{TAB}!1:1")
+              .execute().get("values", [[]]) or [[]])[0]
+    for i, raw in enumerate(svc.values().get(spreadsheetId=sid, range=f"{TAB}!A2:N")
+                            .execute().get("values", []), start=2):
+        r = {h: (raw[j].strip() if j < len(raw) else "") for j, h in enumerate(header)}
+        if not r.get("Company") and not r.get("Role"):
+            continue
+        r.update(tab=TAB, row=i, **folder_facts(r.get("Notes", "")))
+        # One tab for every track since 2026-11-18: the track comes from the folder's family.
+        r["track"] = (jobprofile.track_for_family(r["family"]) if r["folder"]
+                      else "(no folder)")
+        r["band"] = score_band(r.get("Match score", ""))
+        r["outcome"] = outcome(r)
+        rows.append(r)
     return rows
 
 
@@ -155,6 +160,8 @@ def report(rows: list[dict]) -> str:
     why = defaultdict(list)
     for r in unsent:
         note = r.get("Stage reached", "").strip()
+        if not note and r["outcome"]["closed"]:
+            note = "closed"
         if note.lower() not in ours:
             why[note.lower()].append(f"{r['Company']} ({r['tab']}!{r['row']})")
     parts += [f"\n## Not sent — {len(unsent)} rows, {sum(map(len, why.values()))} with a reason",
@@ -168,7 +175,7 @@ def followups(rows: list[dict], min_days: int) -> str:
     due = []
     for r in rows:
         o, applied = r["outcome"], parse_date(r.get("Applied on", ""))
-        if not applied or o["replied"] or o["rejected"] or o["skipped"]:
+        if not applied or o["replied"] or o["rejected"] or o["skipped"] or o["closed"]:
             continue
         if (today - applied).days >= min_days:
             due.append(((today - applied).days, r))

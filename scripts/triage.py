@@ -110,6 +110,11 @@ def cmd_new(a) -> None:
     routed: dict[str, dict] = {}   # routing source -> the roles config/routing.yaml gives it
     keys = seen_keys(a.track)
     failed = failed_collectors()
+    # profile/excluded_companies.yaml (candidate, 2026-11-16): a company that rejected the
+    # candidate, or one they listed by hand, gets no folder. Dropped here, before the model,
+    # and not written to seen — taking a company off the list brings its postings back.
+    excluded = jobprofile.excluded_companies()
+    dropped_excl: dict[str, int] = {}
     by_key: dict[str, dict] = {}
     for name, fname in SOURCES.items():
         if name in TRACK_ONLY and TRACK_ONLY[name] != a.track:
@@ -128,6 +133,9 @@ def cmd_new(a) -> None:
             r = json.loads(line)
             total += 1
             if r.get("dedup_key") in keys:
+                continue
+            if r.get("company") and jobprofile.norm_company(r["company"]) in excluded:
+                dropped_excl[r["company"]] = dropped_excl.get(r["company"], 0) + 1
                 continue
             # Roles are resolved against what config/routing.yaml routes to this record's
             # source. A title that matches only roles routed elsewhere is blocked:
@@ -161,6 +169,9 @@ def cmd_new(a) -> None:
         print(f"# {fname}: {total} records, {new} new for {a.track}, {other} other track"
               + (f", {blocked} routed off this source" if blocked else ""))
 
+    if dropped_excl:
+        print(f"# excluded companies (profile/excluded_companies.yaml), not listed: "
+              + ", ".join(f"{c} x{n}" if n > 1 else c for c, n in sorted(dropped_excl.items())))
     recs = list(by_key.values())
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
     out = ROOT / a.save if a.save else STATE / f"_triage_{a.track}_{stamp}.json"

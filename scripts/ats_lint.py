@@ -1,7 +1,7 @@
 #!/usr/bin/env -S uv run --script
 # /// script
 # requires-python = ">=3.11"
-# dependencies = ["pyyaml", "pypdf"]
+# dependencies = ["pyyaml", "pypdf", "pdfminer.six", "pdfplumber", "pymupdf", "pypdfium2"]
 # ///
 """Enforce rules/ats_rules.md against a produced CV PDF.
 
@@ -9,6 +9,18 @@ The point of linting the *output* rather than the input: an ATS never sees the H
 YAML, it sees whatever falls out of the PDF text layer. So the text is re-extracted through
 PDFKit — the same CoreGraphics path a macOS-side parser takes — and checked from there.
 Structural facts (fonts, sizes, images) come from pypdf.
+
+Since 2026-11-16 (candidate: "a double, triple ATS check") the text checks also run on two
+more independent extractions, because a real ATS never uses PDFKit: pdfminer.six (the layout
+engine most open-source resume parsers sit on) and pypdf (a content-stream reader, the way
+lightweight parsers read), plus poppler's pdftotext when it is installed. A CV passes only if
+every parser reads it the same way: rule 26 compares the words each one extracts, rule 27
+asks each one to find every job with its title and dates, and any text check that fails on any
+parser fails the CV. Three more engines, the ones current parsers are built on: PyMuPDF
+(MuPDF), pypdfium2 (PDFium, Chrome's PDF engine) and pdfplumber (pdfminer with its own line
+grouping). Ready-made "ATS simulator" packages were looked at and left out: unmaintained or of
+unverifiable origin, and some send the CV to an LLM provider. Apache Tika needs a Java runtime,
+which this machine does not have and the project does not install globally.
 
 Usage:
     uv run scripts/ats_lint.py profile/cv/CV_<Surname>.pdf   # name from jobprofile.cv_filename
@@ -156,6 +168,47 @@ def extract_text_pdfkit(pdf: Path) -> tuple[list[str], int]:
     if "error" in data:
         sys.exit(f"Could not open {pdf}")
     return data["pages"], len(data["pages"])
+
+
+def extract_text_pdfminer(pdf: Path, n_pages: int) -> list[str]:
+    """pdfminer.six with default layout analysis, one page at a time."""
+    from pdfminer.high_level import extract_text
+    return [extract_text(str(pdf), page_numbers=[i]) for i in range(n_pages)]
+
+
+def extract_text_pypdf(reader: PdfReader) -> list[str]:
+    return [p.extract_text() or "" for p in reader.pages]
+
+
+def extract_text_pymupdf(pdf: Path) -> list[str]:
+    import pymupdf
+    with pymupdf.open(str(pdf)) as doc:
+        return [page.get_text() for page in doc]
+
+
+def extract_text_pdfium(pdf: Path) -> list[str]:
+    import pypdfium2 as pdfium
+    doc = pdfium.PdfDocument(str(pdf))
+    try:
+        return [doc[i].get_textpage().get_text_range() for i in range(len(doc))]
+    finally:
+        doc.close()
+
+
+def extract_text_pdfplumber(pdf: Path) -> list[str]:
+    import pdfplumber
+    with pdfplumber.open(str(pdf)) as doc:
+        return [page.extract_text() or "" for page in doc.pages]
+
+
+def extract_text_pdftotext(pdf: Path) -> list[str] | None:
+    """poppler's pdftotext in reading order, if installed; pages split on form feed."""
+    import shutil
+    if not shutil.which("pdftotext"):
+        return None
+    res = subprocess.run(["pdftotext", "-enc", "UTF-8", str(pdf), "-"],
+                         capture_output=True, text=True, timeout=60)
+    return res.stdout.rstrip("\f").split("\f") if res.returncode == 0 else None
 
 
 def norm(s: str) -> str:
@@ -360,19 +413,21 @@ def check_text(pages: list[str], rep: Report, master: dict | None) -> None:
 
 
 def check_length(pages: list[str], rep: Report) -> None:
-    """Rule 24: exactly one page. See CLAUDE.md rule 5 for why this overrides the
-    1.5-2 page norm the research supports."""
+    """Rule 24: at most two pages (CLAUDE.md rule 5; the candidate moved it from one page to
+    two on 2026-11-05, in line with the 1.5-2 page norm the research supports)."""
     n = len(pages)
-    if n > 1:
-        overflow = len(pages[1].strip())
-        rep.fail("24", "exactly one page",
-                 f"{n} pages; page 2 carries {overflow} chars — cut bullets, do not shrink type")
+    if n > 2:
+        overflow = len(pages[2].strip())
+        rep.fail("24", "at most 2 pages",
+                 f"{n} pages; page 3 carries {overflow} chars — cut bullets, do not shrink type")
+    elif n == 2:
+        rep.ok("24", "at most 2 pages", f"2 pages, last one {len(pages[1].strip())} chars")
     else:
         fill = len(pages[0].strip())
         if fill < 1800:
-            rep.warn("24", "exactly one page", f"1 page but only {fill} chars — room for more")
+            rep.warn("24", "at most 2 pages", f"1 page but only {fill} chars — room for more")
         else:
-            rep.ok("24", "exactly one page", f"{fill} chars")
+            rep.ok("24", "at most 2 pages", f"{fill} chars")
 
 
 def check_jd_coverage(pages: list[str], jd_path: Path, rep: Report) -> float:
@@ -421,6 +476,80 @@ def check_jd_coverage(pages: list[str], jd_path: Path, rep: Report) -> float:
     return pct
 
 
+WORD_RE = re.compile(r"[a-z0-9]+(?:[.+#/-][a-z0-9]+)*")
+
+
+def words(pages: list[str]):
+    from collections import Counter
+    return Counter(WORD_RE.findall("\n".join(pages).lower().replace("\u00ad", "")))
+
+
+def experience_section(pages: list[str]) -> str:
+    full = "\n".join(pages)
+    up = full.upper()
+    start = up.find("WORK EXPERIENCE")
+    if start < 0:
+        return ""
+    ends = [up.find(h, start) for h in OPTIONAL_HEADINGS if up.find(h, start) > 0]
+    return full[start:min(ends) if ends else len(full)]
+
+
+def check_parsers(by: dict[str, list[str]], rep: Report, master: dict | None,
+                  jd_path: Path | None, base_cov: float | None) -> None:
+    """Rules 26-27 and every text check, on each extraction other than PDFKit's."""
+    base_name, base = next(iter(by.items()))
+    base_words = words(base)
+    base_exp = experience_section(base)
+    rendered = [e for e in (master or {}).get("experience", [])
+                if e.get("company") and e["company"].lower() in base_exp.lower()]
+    jobs = [e["company"] for e in rendered]
+    titles = [e["title"] for e in rendered if e.get("title") and e["title"].lower() in base_exp.lower()]
+    base_dates = len(DATE_RE.findall(base_exp))
+    for name, pages in list(by.items())[1:]:
+        # -- every text check, as this parser reads the CV; only its failures are reported,
+        #    the warnings (verbs, numbers) are the same document's and already listed once.
+        sub = Report()
+        check_text(pages, sub, master)
+        for st, rule, check, detail in sub.rows:
+            if st == "FAIL":
+                rep.fail(rule, f"{check} [{name}]", detail)
+        # -- rule 26: the words agree. A token PDFKit reads and this parser loses is a word
+        #    an ATS on that parser will not match (merged words, split hyphenations, glyphs).
+        w = words(pages)
+        lost = base_words - w
+        share = 100 * sum(lost.values()) / max(1, sum(base_words.values()))
+        detail = f"{share:.1f}% of {base_name}'s words missing"
+        if lost:
+            detail += ": " + ", ".join(sorted(lost)[:6])
+        if share > 2:
+            rep.fail("26", f"parsers agree [{name}]", detail)
+        elif share > 0.5:
+            rep.warn("26", f"parsers agree [{name}]", detail)
+        else:
+            rep.ok("26", f"parsers agree [{name}]", detail)
+        # -- rule 27: each job found with its dates in the experience section.
+        exp = experience_section(pages)
+        flat = re.sub(r"\s+", " ", exp).lower()
+        missing = [c for c in jobs if c.lower() not in flat]
+        lost_titles = [t for t in titles if re.sub(r"\s+", " ", t).lower() not in flat]
+        dates = len(DATE_RE.findall(re.sub(r"[ \t]+", " ", exp)))
+        if not exp:
+            rep.fail("27", f"jobs parsed [{name}]", "no WORK EXPERIENCE section found")
+        elif missing or lost_titles or dates < base_dates:
+            rep.fail("27", f"jobs parsed [{name}]",
+                     f"{len(jobs) - len(missing)}/{len(jobs)} employers, "
+                     f"{len(titles) - len(lost_titles)}/{len(titles)} titles, {dates}/{base_dates} date ranges"
+                     + (f"; lost: {', '.join(missing + lost_titles)}" if missing or lost_titles else ""))
+        else:
+            rep.ok("27", f"jobs parsed [{name}]",
+                   f"{len(jobs)} employers, {len(titles)} titles, {dates} date ranges")
+        # -- rule 20 per parser: the coverage a keyword scorer on this parser would see.
+        if jd_path and base_cov is not None:
+            cov = check_jd_coverage(pages, jd_path, Report())
+            if round(cov) < round(base_cov):
+                rep.warn("20", f"JD coverage [{name}]", f"{cov:.0f}% vs {base_cov:.0f}% on {base_name}")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("pdf", type=Path)
@@ -443,6 +572,13 @@ def main() -> int:
     check_text(pages, rep, master)
     check_length(pages, rep)
     coverage = check_jd_coverage(pages, args.jd, rep) if args.jd else None
+    by = {"PDFKit": pages, "pdfminer": extract_text_pdfminer(args.pdf, len(reader.pages)),
+          "pypdf": extract_text_pypdf(reader), "PyMuPDF": extract_text_pymupdf(args.pdf),
+          "PDFium": extract_text_pdfium(args.pdf), "pdfplumber": extract_text_pdfplumber(args.pdf)}
+    poppler = extract_text_pdftotext(args.pdf)
+    if poppler is not None:
+        by["pdftotext"] = poppler
+    check_parsers(by, rep, master, args.jd, coverage)
 
     print(f"\nATS lint — {args.pdf.name}\n")
     print(rep.render())

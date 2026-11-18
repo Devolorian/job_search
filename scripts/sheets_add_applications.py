@@ -7,8 +7,8 @@
 
 One row per folder in vacancies/, created as soon as the CV exists — with the link to the
 posting, the match score and the ATS coverage — so nothing has to be retyped at apply time.
-The candidate fills in 'Applied on' when the application is actually sent; until then the row counts as
-"Prepared, not yet sent" in the funnel.
+The candidate fills in 'Applied on' when the application is actually sent; until then the row
+is "Prepared".
 
 One row per company, ever: if any vacancy from a company is already in the tracker, a second
 one is not written. Applying to two roles at the same company is a decision made by hand, not
@@ -25,25 +25,27 @@ does not change when a file is renamed. Rows that carry no folder (tracked from 
 with prose in Notes) never collide with one.
 
 Columns A:M only. Column N is an ARRAYFORMULA and writing it destroys the reply metrics.
-Column B ("Applied on") is left empty on purpose — that column is what the funnel counts as
-an application actually sent. The candidate fills it, or sheets_apply_mail.py does when the
+Column B ("Applied on") is left empty on purpose — that column is what counts as an
+application actually sent. The candidate fills it, or sheets_apply_mail.py does when the
 employer's confirmation email arrives; a new row never carries it.
 
-Tracks come from search_profile.yaml (`jobprofile.tracks()`): a second track (e.g. `bi`) gets
-its own tab, same layout, while the default track writes `applications`. `--track` picks which
-folders this call writes and which tab it writes them to. Every track's tab is READ for the
-idempotency checks, so "one row per company, ever" spans the whole tracker, and a folder
-tracked in another tab before a track was split off is never written a second time.
+The tracker is one tab (jobprofile.tracker_tab(), since 2026-11-18). Tracks come from
+search_profile.yaml (`jobprofile.tracks()`); `--track` only picks which folders this call
+writes. The tracks run in parallel and all append to the same tab, so the read of the end of
+the table and the write below it happen under one file lock (tracker_lock) — two tracks
+reading the same end row would write over each other.
 
 Usage:
-    uv run scripts/sheets_add_applications.py                 # default track -> applications
-    uv run scripts/sheets_add_applications.py --track bi      # a second track -> its own tab
+    uv run scripts/sheets_add_applications.py                 # the default track's folders
+    uv run scripts/sheets_add_applications.py --track bi      # another track's folders
     uv run scripts/sheets_add_applications.py --dry-run
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
 import json
 import os
 import re
@@ -74,7 +76,21 @@ LEGAL_SUFFIXES = {"inc", "inc.", "llc", "ltd", "ltd.", "limited", "gmbh", "s.l."
 
 
 TRACKS = jobprofile.tracks()
-TABS = {t["name"]: t["tab"] for t in TRACKS}
+TAB = jobprofile.tracker_tab()
+LOCK = ROOT / "state" / ".tracker.lock"
+
+
+@contextlib.contextmanager
+def tracker_lock():
+    """Held from reading the end of the tab to writing below it. Tracks run in parallel and
+    share the one tab; tg_notify.mark_applied appends under it too."""
+    LOCK.parent.mkdir(exist_ok=True)
+    with LOCK.open("w") as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 
 
 def folder_track(folder: Path) -> str:
@@ -169,9 +185,15 @@ def row_for(folder: Path, added_on: str) -> list | None:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--track", choices=sorted(TABS), default=TRACKS[0]["name"])
+    ap.add_argument("--track", choices=sorted(t["name"] for t in TRACKS),
+                    default=TRACKS[0]["name"])
     args = ap.parse_args()
-    tab = TABS[args.track]
+    with tracker_lock():
+        return add(args)
+
+
+def add(args) -> int:
+    tab = TAB
 
     sid = jobprofile.spreadsheet_id()
     svc = build("sheets", "v4", credentials=creds(), cache_discovery=False).spreadsheets()
@@ -214,16 +236,7 @@ def main() -> int:
         return r[idx].strip() if len(r) > idx else ""
 
     # Keyed on the folder path in Notes, not on the CV file name — see the module docstring.
-    # Read across BOTH tabs: one row per company spans the tracker, not one tab. The other
-    # tab's columns are resolved from its own header, never assumed to match this one.
     tracked = [(rows_now, company_col, notes_col)]
-    for other in (t for t in TABS.values() if t != tab):
-        oh = (svc.values().get(spreadsheetId=sid, range=f"{other}!1:1")
-              .execute().get("values", [[]]) or [[]])[0]
-        if "Company" in oh and "Notes" in oh:
-            orows = (svc.values().get(spreadsheetId=sid, range=f"{other}!A2:M")
-                     .execute().get("values", []))
-            tracked.append((orows, oh.index("Company"), oh.index("Notes")))
     # Only the first token: a note may follow the path ("vacancies/... | sent CV had Snowflake").
     # The path itself never contains a space.
     have_folders = {cell(r, n).split()[0] for rs, _, n in tracked for r in rs if cell(r, n)}

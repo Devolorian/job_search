@@ -53,6 +53,9 @@ sources:
     first_run_max_requests: 80
     max_pages: 6            # 10 cards a page; paging stops early on a short page
     max_requests: 45
+    # Share of the budget the listing pages may use; the rest is held for descriptions,
+    # pending cards first (2026-11-14: listings alone ate the budget two runs running).
+    search_share: 0.5
     # Pacing. The limit is a sliding window per anonymous IP: at 3-7s spacing nearly every run
     # got a 429 after 1-15 requests, while a single request an hour later answered 200. So:
     # slower requests and one real pause, not fewer searches.
@@ -302,14 +305,15 @@ sources:
     first_run_lookback_hours: 336
 
 # ---------------------------------------------------------------------------
-# Destinations. Google Sheets is the tracker and its funnel; `uv run scripts/setup_sheets.py`
-# creates it and writes spreadsheet_id into profile/sources.yaml.
+# Destinations. Google Sheets is the tracker: one tab for every track, no funnel, stats or log
+# tabs (since 2026-11-18). `uv run scripts/setup_sheets.py` builds it and writes spreadsheet_id
+# into profile/sources.yaml.
 # ---------------------------------------------------------------------------
 destinations:
   google_sheets:
     spreadsheet_title: "Job Search Tracker"
     spreadsheet_id: ""
-    tabs: [applications, daily_stats, funnel]
+    tab: applications
 
 # ---------------------------------------------------------------------------
 # Evaluated and rejected. Recorded so they are not re-researched later.

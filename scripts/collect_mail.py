@@ -192,7 +192,7 @@ def save_token(cred: Credentials) -> None:
 
 
 def tracker_companies() -> list[str]:
-    """Companies in the first track's tracker tab — a sender or subject naming one of them is read in
+    """Companies in the tracker tab — a sender or subject naming one of them is read in
     full. Failure here narrows the prefilter to ATS domains and vocabulary; it never stops
     the run."""
     try:
@@ -205,7 +205,7 @@ def tracker_companies() -> list[str]:
         cred = service_account.Credentials.from_service_account_info(info, scopes=SHEETS_SCOPES)
         sid = jobprofile.spreadsheet_id()
         svc = build("sheets", "v4", credentials=cred, cache_discovery=False).spreadsheets()
-        rows = svc.values().get(spreadsheetId=sid, range=f"{jobprofile.tracks()[0]['tab']}!A1:M"
+        rows = svc.values().get(spreadsheetId=sid, range=f"{jobprofile.tracker_tab()}!A1:M"
                                 ).execute().get("values", [])
         ci = rows[0].index("Company")
         return sorted({r[ci].strip() for r in rows[1:] if len(r) > ci and r[ci].strip()})

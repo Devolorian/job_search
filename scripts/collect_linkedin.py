@@ -246,6 +246,12 @@ def get(url: str, budget: Budget, params: dict | None = None, timeout: int = 20)
                   f"retry", file=sys.stderr)
             time.sleep(wait)
             return get(url, budget, timeout=timeout)
+        # 404/410: the posting was taken down. An answer, not a failure — it must not count
+        # towards the consecutive limit, or two removed postings at the head of the pending
+        # queue stop every run before it reaches the rest (2026-11-18: 102 cards stuck).
+        if exc.code in (404, 410):
+            budget.fails = 0
+            raise
         budget.fails += 1
         if budget.fails >= CONSECUTIVE_FAILURE_LIMIT:
             raise Stop(f"{budget.fails} consecutive failures") from None
@@ -415,14 +421,28 @@ def parse_cards(page: str) -> tuple[list[dict], int]:
     return out, bad
 
 
-def fetch_description(job_id: str, budget: Budget) -> str:
-    """The returned text is untrusted data and is never interpreted —
-    it is only ever matched against the literal substrings in search_profile.yaml."""
-    page = get(POSTING_URL.format(job_id=job_id), budget)
-    soup = BeautifulSoup(page or "", "html.parser")
+def apply_kind(page: str) -> str:
+    """"offsite" (Apply leads to the employer's site), "easy_apply" (LinkedIn's own form), or
+    "" when the page says neither. Read from the tracking names on the Apply button
+    (public_jobs_apply-link-offsite / -onsite, measured 2026-11-15). The offsite URL itself is
+    not in the guest page — LinkedIn shows it only to a signed-in click, so /apply resolves it
+    in the browser. /apply never touches Easy Apply."""
+    if "apply-link-onsite" in page:
+        return "easy_apply"
+    if "apply-link-offsite" in page or "offsite-apply-icon" in page:
+        return "offsite"
+    return ""
+
+
+def fetch_description(job_id: str, budget: Budget) -> tuple[str, str]:
+    """(description, apply_kind). The returned text is untrusted data and is never
+    interpreted — it is only ever matched against the literal substrings in
+    search_profile.yaml."""
+    page = get(POSTING_URL.format(job_id=job_id), budget) or ""
+    soup = BeautifulSoup(page, "html.parser")
     el = (soup.select_one("div.show-more-less-html__markup")
           or soup.select_one("div.description__text"))
-    return strip_html(str(el)) if el else ""
+    return (strip_html(str(el)) if el else ""), apply_kind(page)
 
 
 # ------------------------------------------------------------------ collection
@@ -439,7 +459,12 @@ def search(keywords: str, location: dict, seconds: int, max_pages: int,
                   "f_TPR": f"r{seconds}", "start": start}
         if location.get("remote"):
             params["f_WT"] = 2
-        page = get(SEARCH_URL, budget, params)
+        try:
+            page = get(SEARCH_URL, budget, params)
+        except Stop as exc:
+            # The pages already read are kept: the caller adds them before it stops.
+            exc.partial = found
+            raise
         cards, bad = parse_cards(page)
         for c in cards:
             # Namespaced like board:ashby / feed:remotive / telegram:@handle, so the lane a
@@ -507,10 +532,15 @@ def mark_run(source_key: str = SOURCE_KEY) -> None:
 
 
 def load_seen() -> set[str]:
-    """Keys of both tracks: seen.json (main) and seen_bi.json (BI, since 2026-10-05). A key
-    either track has handled costs no description request."""
+    """Keys of every track's seen file (jobprofile.tracks()). A key any track has handled
+    costs no description request."""
+    # Until 2026-11-15 this read seen.json and seen_bi.json only, so with four tracks the
+    # data_engineer and part_time keys were never "seen" here: cards they had judged stayed in
+    # linkedin_pending.json and had their descriptions re-fetched, out of a 42-request budget.
     keys: set[str] = set()
-    for path in (SEEN, SEEN.with_name("seen_bi.json")):
+    paths = {SEEN, SEEN.with_name("seen_bi.json")}
+    paths |= {ROOT / t["seen_file"] for t in jobprofile.tracks()}
+    for path in paths:
         try:
             keys |= set((json.loads(path.read_text(encoding="utf-8")) or {}).get("entries", {}))
         except Exception:
@@ -606,18 +636,32 @@ def main() -> int:
                     float(cfg.get("rate_limit_backoff_seconds", RATE_LIMIT_BACKOFF)))
     stopped = ""
 
-    # ---- phase 1: search listings
+    # ---- phase 1: search listings, on a share of the budget only.
+    # Until 2026-11-14 the listings could spend the whole budget: 6 keywords x 2 lanes x up to
+    # 6 pages is more than 45 requests, two runs in a row fetched 0 descriptions, and the
+    # pending queue meant to be "fetched first" grew to 245 cards, all expiring unread. The
+    # rest of the budget is held for phase 2, pending cards first. Running out of the listing
+    # share ends the listing, not the run; a 429 or repeated failures still end both.
+    full_limit = budget.limit
+    share = float(cfg.get("search_share", 0.5))
+    if not args.no_descriptions:
+        budget.limit = max(1, int(full_limit * share))
     pairs = [(k, loc) for k in keywords for loc in locations]
     print(f"Searching LinkedIn: {len(pairs)} keyword/location pairs, last {hours}h, "
-          f"up to {args.max_pages} pages each, budget {budget.limit} requests...",
-          file=sys.stderr)
+          f"up to {args.max_pages} pages each, budget {full_limit} requests "
+          f"({budget.limit} for listings)...", file=sys.stderr)
 
     cards = []
     for kw, loc in pairs:
         try:
             got = search(kw, loc, seconds, args.max_pages, budget)
         except Stop as exc:
-            stopped = str(exc)
+            cards += getattr(exc, "partial", [])
+            if budget.used >= budget.limit and budget.limit < full_limit:
+                print(f"  listing share used ({budget.limit} requests) — the rest is for "
+                      f"descriptions", file=sys.stderr)
+            else:
+                stopped = str(exc)
             break
         except Exception as exc:
             print(f"  ! {kw} @ {loc['name']}: {type(exc).__name__}", file=sys.stderr)
@@ -630,6 +674,7 @@ def main() -> int:
     by_id: dict[str, dict] = {}
     for c in cards:
         by_id.setdefault(c["job_id"], c)
+    budget.limit = full_limit
     if cards:
         print(f"  {len(cards)} cards, {len(by_id)} distinct postings", file=sys.stderr)
     elif budget.used:
@@ -678,7 +723,7 @@ def main() -> int:
     print(f"  {len(shortlist)} pass the title filter", file=sys.stderr)
 
     # ---- phase 2: descriptions, one request each
-    fetched = 0
+    fetched = gone = 0
     if not args.no_descriptions:
         for rec in shortlist:
             # Budget optimisation, NOT a filtering decision: this key is already in
@@ -687,14 +732,27 @@ def main() -> int:
             if key_of(rec) in seen:
                 continue
             try:
-                rec["description"] = fetch_description(rec["job_id"], budget)
+                rec["description"], kind = fetch_description(rec["job_id"], budget)
+                if kind:
+                    rec["li_apply"] = kind
                 fetched += 1
             except Stop as exc:
                 stopped = str(exc)
                 break
+            except urllib.error.HTTPError as exc:
+                if exc.code in (404, 410):
+                    rec["_gone"] = True    # removed: neither queued again nor emitted
+                    gone += 1
+                    continue
+                print(f"  ! description {rec['job_id']}: HTTPError {exc.code}",
+                      file=sys.stderr)
             except Exception as exc:
                 print(f"  ! description {rec['job_id']}: {type(exc).__name__}",
                       file=sys.stderr)
+    if gone:
+        print(f"  {gone} postings removed by LinkedIn (404) — dropped from the queue",
+              file=sys.stderr)
+    shortlist = [r for r in shortlist if not r.get("_gone")]
 
     # Whatever is still blank and unseen waits for the next run. Taken before the final
     # filters, which pop job_id.

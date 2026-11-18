@@ -24,8 +24,7 @@ collect_telegram.py uses, with reads only. Secrets: ~/.job_search/telegram_bot.e
          Applied (only if empty — it only moves forward and hand notes stay), Status = Applied
          (only from Prepared or empty). A folder with no row (a second role at a company already
          tracked) gets a new row: the reaction is the hand decision that one-row-per-company
-         leaves to the candidate. Every change goes to the mail_log tab, From = "telegram reaction".
-         A removed reaction is not undone.
+         leaves to the candidate. Every change is printed. A removed reaction is not undone.
   setup  After /start in the bot chat: finds the chat id and writes it to telegram_bot.env.
 
 Columns are resolved by header name; Notes (M) and the formula column (N) are never written,
@@ -59,7 +58,8 @@ from telethon import TelegramClient
 from telethon.sessions import StringSession
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from sheets_add_applications import CONFIG, TABS, creds, folder_track, row_for  # noqa: E402
+from sheets_add_applications import (CONFIG, TAB, creds, folder_track, row_for,  # noqa: E402
+                                     tracker_lock)
 
 import jobprofile  # scripts/jobprofile.py — profile/ paths and the merged config
 
@@ -68,9 +68,6 @@ VACANCIES = ROOT / "vacancies"
 POSTED = ROOT / "state" / "tg_posted.json"
 BOT_ENV = Path.home() / ".job_search" / "telegram_bot.env"
 USER_ENV = Path.home() / ".job_search" / "telegram.env"
-LOG_TAB = "mail_log"
-LOG_HEADER = ["Logged on", "Email date", "Company", "Role", "Event", "From", "Subject",
-              "Change", "Evidence"]
 
 
 def read_env(path: Path, keys: tuple[str, ...], required: bool = True) -> dict[str, str]:
@@ -260,32 +257,56 @@ def cmd_sync(args) -> int:
               file=sys.stderr)
         return 0
 
+    marked = mark_applied(reacted, "telegram reaction", "reaction on its card in the bot chat",
+                          args.dry_run)
+    if args.dry_run:
+        return 0
+    # Last, after the sheet: a failed write leaves the cards unmarked and the next sync retries.
+    for rel in marked:
+        state["folders"][rel]["applied_on"] = reacted[rel]
+    save_posted(state)
+    print(f"tg_notify sync: {len(marked)} application(s) marked from reactions.",
+          file=sys.stderr)
+    return 0
+
+
+def mark_applied(applied: dict[str, str], source: str, evidence: str,
+                 dry_run: bool = False) -> list[str]:
+    """Mark folders as applied in the tracker: {folder path: YYYY-MM-DD}. Returns the folders
+    marked. Shared by `sync` (a reaction on a card) and apply_queue.py (a form sent through
+    /apply).
+
+    Applied on = the date (only if empty), Stage reached = Applied (only if empty — it only
+    moves forward and hand notes stay), Status = Applied (only from Prepared or empty). A
+    folder with no row (a second role at a company already tracked) gets a new row: the
+    application is the hand decision that one-row-per-company leaves to the candidate. Every
+    change is printed with `source` and `evidence`; the tracker has no log tab."""
+    with tracker_lock():
+        return _mark_applied(applied, source, evidence, dry_run)
+
+
+def _mark_applied(applied, source, evidence, dry_run):
     sid = jobprofile.spreadsheet_id()
     svc = build("sheets", "v4", credentials=creds(), cache_discovery=False).spreadsheets()
     need = ["Company", "Role", "Applied on", "Status", "Stage reached", "Notes"]
-    tabs: dict[str, tuple[dict, list]] = {}
-    for tab in TABS.values():
-        header = (svc.values().get(spreadsheetId=sid, range=f"{tab}!1:1")
-                  .execute().get("values", [[]]) or [[]])[0]
-        col = {n: i for i, n in enumerate(header)}
-        if any(n not in col for n in need):
-            sys.exit(f"{tab} tab lacks one of {need} — run setup_sheets.py first.")
-        # The whole A:M block, never one column: see sheets_add_applications.py.
-        tabs[tab] = (col, svc.values().get(spreadsheetId=sid, range=f"{tab}!A2:M")
-                     .execute().get("values", []))
+    header = (svc.values().get(spreadsheetId=sid, range=f"{TAB}!1:1")
+              .execute().get("values", [[]]) or [[]])[0]
+    col = {n: i for i, n in enumerate(header)}
+    if any(n not in col for n in need):
+        sys.exit(f"{TAB} tab lacks one of {need} — run setup_sheets.py first.")
+    # The whole A:M block, never one column: see sheets_add_applications.py.
+    rows = svc.values().get(spreadsheetId=sid, range=f"{TAB}!A2:M").execute().get("values", [])
 
     def cell(r, i):
         return r[i].strip() if len(r) > i else ""
 
-    updates, appends, log_rows = [], {}, []
+    updates, appends, marked = [], [], []
     today = date.today().isoformat()
-    for rel, when in sorted(reacted.items(), key=lambda kv: kv[1]):
+    for rel, when in sorted(applied.items(), key=lambda kv: kv[1]):
         folder = ROOT / rel
-        hit = next(((t, i) for t, (col, rows) in tabs.items() for i, r in enumerate(rows)
-                    if cell(r, col["Notes"]).split()[:1] == [rel]), None)
-        if hit:
-            tab, i = hit
-            col, rows = tabs[tab]
+        i = next((i for i, r in enumerate(rows)
+                  if cell(r, col["Notes"]).split()[:1] == [rel]), None)
+        if i is not None:
             r = rows[i]
             writes = {}
             if not cell(r, col["Applied on"]):
@@ -295,55 +316,37 @@ def cmd_sync(args) -> int:
             if cell(r, col["Status"]).lower() in ("", "prepared"):
                 writes["Status"] = "Applied"
             for k, v in writes.items():
-                updates.append({"range": f"{tab}!{a1(col[k])}{i + 2}", "values": [[v]]})
+                updates.append({"range": f"{TAB}!{a1(col[k])}{i + 2}", "values": [[v]]})
             company, role = cell(r, col["Company"]), cell(r, col["Role"])
             change = "; ".join(f"{a1(col[k])} {k}: {cell(r, col[k])!r} -> {v!r}"
                                for k, v in writes.items()) or "no change (already there)"
         else:
             row = row_for(folder, today) if folder.exists() else None
             if not row:
-                print(f"  ! {rel}: reacted, but no tracker row and none can be built — "
+                print(f"  ! {rel}: applied, but no tracker row and none can be built — "
                       f"mark it by hand", file=sys.stderr)
                 continue
             row[1], row[9], row[11] = when, "Applied", "Applied"
-            tab = TABS[folder_track(folder)]
-            appends.setdefault(tab, []).append(row)
+            appends.append(row)
             company, role = row[2], row[3]
-            change = f"new row in {tab} (no row for this folder), Applied on {when}"
-        log_rows.append([today, when, company, role, "applied", "telegram reaction",
-                         rel, change, "reaction on its card in the bot chat"])
-        state["folders"][rel]["applied_on"] = when
-        print(f"  ~ {when} {company} — {role}: {change}", file=sys.stderr)
+            change = f"new row (no row for this folder), Applied on {when}"
+        marked.append(rel)
+        print(f"  ~ {when} {company} — {role} [{source}]: {change}", file=sys.stderr)
 
-    if args.dry_run:
-        print(f"--dry-run: {len(updates)} cell(s), {sum(map(len, appends.values()))} new "
-              f"row(s), {len(log_rows)} log row(s) not written.", file=sys.stderr)
-        return 0
+    if dry_run:
+        print(f"--dry-run: {len(updates)} cell(s), {len(appends)} new row(s) not written.",
+              file=sys.stderr)
+        return marked
 
     if updates:
         svc.values().batchUpdate(spreadsheetId=sid, body={
             "valueInputOption": "USER_ENTERED", "data": updates}).execute()
-    for tab, rows in appends.items():
-        start = len(tabs[tab][1]) + 2
-        svc.values().update(spreadsheetId=sid, range=f"{tab}!A{start}:M{start + len(rows) - 1}",
-                            valueInputOption="USER_ENTERED", body={"values": rows}).execute()
-    if log_rows:
-        names = {s["properties"]["title"] for s in
-                 svc.get(spreadsheetId=sid, fields="sheets.properties.title").execute()["sheets"]}
-        if LOG_TAB not in names:
-            svc.batchUpdate(spreadsheetId=sid, body={"requests": [
-                {"addSheet": {"properties": {"title": LOG_TAB}}}]}).execute()
-            svc.values().update(spreadsheetId=sid, range=f"{LOG_TAB}!A1",
-                                valueInputOption="RAW", body={"values": [LOG_HEADER]}).execute()
-        have = svc.values().get(spreadsheetId=sid, range=f"{LOG_TAB}!A1:I"
-                                ).execute().get("values", [])
-        svc.values().update(spreadsheetId=sid, range=f"{LOG_TAB}!A{len(have) + 1}",
-                            valueInputOption="RAW", body={"values": log_rows}).execute()
-    # Last, after the sheet: a failed write leaves the cards unmarked and the next sync retries.
-    save_posted(state)
-    print(f"tg_notify sync: {len(log_rows)} application(s) marked from reactions.",
-          file=sys.stderr)
-    return 0
+    if appends:
+        start = len(rows) + 2
+        svc.values().update(spreadsheetId=sid,
+                            range=f"{TAB}!A{start}:M{start + len(appends) - 1}",
+                            valueInputOption="USER_ENTERED", body={"values": appends}).execute()
+    return marked
 
 
 # ------------------------------------------------------------------------------------ setup --
